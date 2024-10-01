@@ -7,7 +7,7 @@ import sys
 import os
 
 # Add the 'classes' directory to the PYTHONPATH
-sys.path.append(os.path.join(os.path.dirname(__file__), './classes'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '../classes'))
 
 from Robot import Robot
 import time
