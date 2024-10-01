@@ -46,8 +46,8 @@ while elapsed_time < traj_time:
     joint_positions.append(robot.get_joints_readings()[0]) # Read joint values
     time_stamps.append(elapsed_time)
     
-    print(joint_positions[-1])
-    print(time_stamps[-1])
+    # print(joint_positions[-1])
+    # print(time_stamps[-1])
     
     elapsed_time = time.time() - start_time
 
@@ -70,6 +70,7 @@ for i in range(4):
     axs[i].set_title(joint_titles[i])
     axs[i].set_xlabel('Time (s)')
     axs[i].set_ylabel('Position (degrees)')
+    axs[i].set_ylim(-5, 45)
     axs[i].legend()
     axs[i].grid(True)
 
