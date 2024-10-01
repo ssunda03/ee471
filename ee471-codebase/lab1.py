@@ -56,3 +56,25 @@ time.sleep(1)  # Pause for a second before ending
 joint_positions_np = np.array(joint_positions)
 time_stamps_np = np.array(time_stamps)
 
+# After all the joint data is collected, plot the motion profiles
+
+# Create a figure with 4 subplots
+fig, axs = mpl.subplots(4, 1, figsize=(8, 10))  # 4 subplots vertically aligned
+
+# Titles for each subplot
+joint_titles = ['Base Joint', 'Joint 2', 'Joint 3', 'Joint 4']
+
+# Plot each joint's motion profile
+for i in range(4):
+    axs[i].plot(time_stamps_np, joint_positions_np[:, i], label=f'Joint {i+1}')
+    axs[i].set_title(joint_titles[i])
+    axs[i].set_xlabel('Time (s)')
+    axs[i].set_ylabel('Position (degrees)')
+    axs[i].legend()
+    axs[i].grid(True)
+
+# Adjust layout
+mpl.tight_layout()
+
+# Show the plot
+mpl.show()
