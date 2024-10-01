@@ -25,6 +25,37 @@ def init_robot(robot, traj_init):
     robot.write_joints([0, 0, 0, 0])  # Write joints to zero position
     time.sleep(traj_init)  # Wait for trajectory completion
 
+def create_joint_position_subplots(time_stamps_np, joint_positions_np, traj_time):
+    """
+    Creates 4 different subplots of the joint positions during the trajectory
+    
+    Parameters:
+    time_stamps_np (ndarray): Array of time stamps.
+    joint_positions_np (ndarray): Array of the joint positions over time.
+    traj_time (float): The total time for the robot's trajectory motion.
+    """
+    # Create a figure with 4 subplots
+    fig, axs = mpl.subplots(4, 1, figsize=(8, 10))  # 4 subplots vertically aligned
+
+    # Titles for each subplot
+    joint_titles = ['Base Joint', 'Joint 2', 'Joint 3', 'Joint 4']
+
+    # Plot each joint's motion profile
+    for i in range(4):
+        axs[i].plot(time_stamps_np, joint_positions_np[:, i], label=f'Joint {i+1}')
+        axs[i].set_title(joint_titles[i])
+        axs[i].set_xlabel('Time (s)')
+        axs[i].set_ylabel('Position (degrees)')
+        axs[i].set_ylim(-5, 45)
+        axs[i].legend()
+        axs[i].grid(True)
+
+    # Adjust layout
+    mpl.tight_layout()
+
+    # Save the plot
+    fig.savefig(f"BaseJointTrajTime_{traj_time}.png")
+    
 def analyze_time_intervals(time_stamps_np, traj_time):
     """
     Analyzes and plots the time intervals between consecutive readings.
@@ -62,7 +93,6 @@ def analyze_time_intervals(time_stamps_np, traj_time):
 
     # Save the histogram
     mpl.savefig(f"TimeIntervalsTrajTime_{traj_time}.png")
-    mpl.show()
 
 def run_robot_trajectory(robot, traj_time):
     base_waypoint = 45  # Define base waypoints
@@ -85,40 +115,27 @@ def run_robot_trajectory(robot, traj_time):
     joint_positions_np = np.array(joint_positions)
     time_stamps_np = np.array(time_stamps)
 
-    # After all the joint data is collected, plot the motion profiles and analyze time stamps
-    analyze_time_intervals(time_stamps_np, traj_time)
-
-    # Create a figure with 4 subplots
-    fig, axs = mpl.subplots(4, 1, figsize=(8, 10))  # 4 subplots vertically aligned
-
-    # Titles for each subplot
-    joint_titles = ['Base Joint', 'Joint 2', 'Joint 3', 'Joint 4']
-
-    # Plot each joint's motion profile
-    for i in range(4):
-        axs[i].plot(time_stamps_np, joint_positions_np[:, i], label=f'Joint {i+1}')
-        axs[i].set_title(joint_titles[i])
-        axs[i].set_xlabel('Time (s)')
-        axs[i].set_ylabel('Position (degrees)')
-        axs[i].set_ylim(-5, 45)
-        axs[i].legend()
-        axs[i].grid(True)
-
-    # Adjust layout
-    mpl.tight_layout()
-
-    # Save the plot
-    fig.savefig(f"BaseJointTrajTime_{traj_time}.png")
+    return time_stamps_np, joint_positions_np
 
 def main():
     # Initialize Robot instance
     robot = Robot()
     traj_init = 1
+    
     init_robot(robot, traj_init)
-   
+    
     # Call the robot trajectory function with different traj_time values
     traj_time = 10  # You can change this to any other value to test
-    run_robot_trajectory(robot, traj_time)
+    tstamp, jpos = run_robot_trajectory(robot, traj_time)
+    create_joint_position_subplots(tstamp, jpos, traj_time)
+    analyze_time_intervals(tstamp, traj_time)
+    
+    init_robot(robot, traj_init)
+    
+    traj_time = 2  # You can change this to any other value to test
+    tstamp, jpos = run_robot_trajectory(robot, traj_time)
+    create_joint_position_subplots(tstamp, jpos, traj_time)
+    analyze_time_intervals(tstamp, traj_time)
 
 if __name__ == '__main__':
     main()
