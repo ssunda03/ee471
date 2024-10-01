@@ -12,7 +12,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../classes'))
 from Robot import Robot
 import time
 import numpy as np
-import matplotlib.pyplot as mpl
+import matplotlib.pyplot as plt
 
 def init_robot(robot, traj_init):
     # Setup robot
@@ -35,7 +35,7 @@ def create_joint_position_subplots(time_stamps_np, joint_positions_np, traj_time
     traj_time (float): The total time for the robot's trajectory motion.
     """
     # Create a figure with 4 subplots
-    fig, axs = mpl.subplots(4, 1, figsize=(8, 10))  # 4 subplots vertically aligned
+    fig, axs = plt.subplots(4, 1, figsize=(8, 10))  # 4 subplots vertically aligned
 
     # Titles for each subplot
     joint_titles = ['Base Joint', 'Joint 2', 'Joint 3', 'Joint 4']
@@ -51,7 +51,7 @@ def create_joint_position_subplots(time_stamps_np, joint_positions_np, traj_time
         axs[i].grid(True)
 
     # Adjust layout
-    mpl.tight_layout()
+    plt.tight_layout()
 
     # Save the plot
     fig.savefig(f"BaseJointTrajTime_{traj_time}.png")
@@ -83,16 +83,16 @@ def analyze_time_intervals(time_stamps_np, traj_time):
     print(f"Standard Deviation: {stddev_interval:.2f} ms")
 
     # Plot a histogram of the time intervals
-    mpl.figure(figsize=(8, 6))
-    mpl.hist(time_intervals, bins=20, edgecolor='black')
-    mpl.title("Histogram of Time Intervals Between Readings")
-    mpl.xlabel("Time Interval (ms)")
-    mpl.ylabel("Frequency")
-    mpl.grid(True)
-    mpl.tight_layout()
+    plt.figure(figsize=(8, 6))
+    plt.hist(time_intervals, bins=20, edgecolor='black')
+    plt.title("Histogram of Time Intervals Between Readings")
+    plt.xlabel("Time Interval (ms)")
+    plt.ylabel("Frequency")
+    plt.grid(True)
+    plt.tight_layout()
 
     # Save the histogram
-    mpl.savefig(f"TimeIntervalsTrajTime_{traj_time}.png")
+    plt.savefig(f"TimeIntervalsTrajTime_{traj_time}.png")
 
 def run_robot_trajectory(robot, traj_time):
     base_waypoint = 45  # Define base waypoints
