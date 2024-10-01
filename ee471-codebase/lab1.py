@@ -25,6 +25,45 @@ def init_robot(robot, traj_init):
     robot.write_joints([0, 0, 0, 0])  # Write joints to zero position
     time.sleep(traj_init)  # Wait for trajectory completion
 
+def analyze_time_intervals(time_stamps_np, traj_time):
+    """
+    Analyzes and plots the time intervals between consecutive readings.
+    
+    Parameters:
+    time_stamps_np (ndarray): Array of time stamps.
+    traj_time (float): The total time for the robot's trajectory motion.
+    """
+    # Calculate time intervals between consecutive readings
+    time_intervals = np.diff(time_stamps_np) * 1000  # Convert from seconds to milliseconds
+
+    # Calculate statistics
+    mean_interval = np.mean(time_intervals)
+    median_interval = np.median(time_intervals)
+    max_interval = np.max(time_intervals)
+    min_interval = np.min(time_intervals)
+    stddev_interval = np.std(time_intervals)
+
+    # Print the statistics with clear labels
+    print(f"Time Interval Statistics (in milliseconds):")
+    print(f"Mean: {mean_interval:.2f} ms")
+    print(f"Median: {median_interval:.2f} ms")
+    print(f"Max: {max_interval:.2f} ms")
+    print(f"Min: {min_interval:.2f} ms")
+    print(f"Standard Deviation: {stddev_interval:.2f} ms")
+
+    # Plot a histogram of the time intervals
+    mpl.figure(figsize=(8, 6))
+    mpl.hist(time_intervals, bins=20, edgecolor='black')
+    mpl.title("Histogram of Time Intervals Between Readings")
+    mpl.xlabel("Time Interval (ms)")
+    mpl.ylabel("Frequency")
+    mpl.grid(True)
+    mpl.tight_layout()
+
+    # Save the histogram
+    mpl.savefig(f"TimeIntervalsTrajTime_{traj_time}.png")
+    mpl.show()
+
 def run_robot_trajectory(robot, traj_time):
     base_waypoint = 45  # Define base waypoints
     joint_positions: list[list[float]] = []
@@ -46,7 +85,8 @@ def run_robot_trajectory(robot, traj_time):
     joint_positions_np = np.array(joint_positions)
     time_stamps_np = np.array(time_stamps)
 
-    # After all the joint data is collected, plot the motion profiles
+    # After all the joint data is collected, plot the motion profiles and analyze time stamps
+    analyze_time_intervals(time_stamps_np, traj_time)
 
     # Create a figure with 4 subplots
     fig, axs = mpl.subplots(4, 1, figsize=(8, 10))  # 4 subplots vertically aligned
