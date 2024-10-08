@@ -220,3 +220,35 @@ class Robot(OM_X_arm):
             transformation_matrices[i] = self.get_dh_row_mat(dh_row)
 
         return transformation_matrices
+    
+    def get_acc_mat(self, joint_angles):
+        # Ensure joint_angles is a numpy array
+        joint_angles = np.asarray(joint_angles)
+
+        # Create array to hold the A matrices
+        A_matrices = np.zeros((4, 4, 4))
+
+        # Create array to hold the T matrices
+        T_matrices = np.zeros((4, 4, 4))
+
+        for i in range(4):
+            # Update the theta value in the DH table with the corresponding joint angle
+            dh_row = self.dh_table[i].copy()
+            dh_row[0] += np.radians(joint_angles[i])
+
+            # Calculate the transformation matrix for the current joint
+            A_matrices[i] = self.get_dh_row_mat(dh_row)
+
+            # Update T_matrix array
+            if i == 0:
+                T_matrices[i] = A_matrices[i] # Handle base case
+            else:
+                T_matrices[i] = np.dot(T_matrices[i - 1], A_matrices[i]) # The next T is just the current A multiplied by last T
+
+        return T_matrices
+    
+    def get_fk(self, joint_angles):
+        return self.get_acc_mat(joint_angles)[3]
+
+
+
