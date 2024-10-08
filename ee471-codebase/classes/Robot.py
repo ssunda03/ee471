@@ -5,6 +5,8 @@ import numpy as np
 from OM_X_arm import OM_X_arm
 from DX_XM430_W350 import DX_XM430_W350
 
+THETA = "variable"
+
 """
 Robot class for controlling the OpenManipulator-X Robot.
 Inherits from OM_X_arm and provides methods specific to the robot's operation.
@@ -30,6 +32,19 @@ class Robot(OM_X_arm):
         # Set the robot to move between positions with a 5 second trajectory profile
         # change here or call writeTime in scripts to change
         self.write_time(5)
+
+        # self.dh_table = np.array(
+        #     [(lambda theta: theta),                                 0.077,  0,      -np.pi/2],
+        #     [(lambda theta: theta - (np.pi/2 - np.arcsin(24/130))), 0,      0.13,   0],
+        #     [(lambda theta: theta + (np.pi/2 - np.arcsin(24/130))), 0,      0.124,  0],
+        #     [(lambda theta: theta),                                 0,      0.126,  0]
+        # )
+        self.dh_table = np.array([
+            [0,                                 0.077,  0,      -np.pi/2],
+            [-(np.pi/2 - np.arcsin(24/130)),    0,      0.13,   0],
+            [(np.pi/2 - np.arcsin(24/130)),     0,      0.124,  0],
+            [0,                                 0,      0.126,  0]
+        ])
 
     """
     Sends the joints to the desired angles.
@@ -159,3 +174,49 @@ class Robot(OM_X_arm):
     def write_velocities(self, vels):
         vels = [round(vel * DX_XM430_W350.TICKS_PER_ANGVEL) for vel in vels]
         self.bulk_read_write(DX_XM430_W350.VEL_LEN, DX_XM430_W350.GOAL_VELOCITY, vels)
+    
+    
+    """
+    Calculates the homogeneous transformation matrix Ai for a given row of DH parameters.
+    
+    Parameters:
+    dh_row: A 1x4 array containing the DH parameters [theta, d, a, alpha].
+    Returns:
+    A 4x4 numpy array representing the homogeneous transformation matrix Ai.
+    """
+    def get_dh_row_mat(self, dh_row):
+        theta, d, a, alpha = dh_row
+
+        A_i = np.array([
+            [np.cos(theta), -np.sin(theta) * np.cos(alpha), np.sin(theta) * np.sin(alpha),  a * np.cos(theta)],
+            [np.sin(theta), np.cos(theta) * np.cos(alpha),  -np.cos(theta) * np.sin(alpha), a * np.sin(theta)],
+            [0,             np.sin(alpha),                  np.cos(alpha),                  d],
+            [0,             0,                              0,                              1]
+        ])
+
+        return A_i
+        
+    """
+    Calculates a 4x4x4 numpy array of transformation matrices for specified joint angles.
+
+    Parameters:
+    joint_angles: A 1x4 array containing the joint angles.
+    Returns:
+    A 4x4x4 numpy array of transformation matrices A1, A2, A3, A4.
+    """
+    def get_int_mat(self, joint_angles):
+        # Ensure joint_angles is a numpy array
+        joint_angles = np.asarray(joint_angles)
+
+        # Create an array to hold the transformation matrices
+        transformation_matrices = np.zeros((4, 4, 4))
+
+        for i in range(4):
+            # Update the theta value in the DH table with the corresponding joint angle
+            dh_row = self.dh_table[i].copy()
+            dh_row[0] += np.radians(joint_angles[i])
+
+            # Calculate the transformation matrix for the current joint
+            transformation_matrices[i] = self.get_dh_row_mat(dh_row)
+
+        return transformation_matrices

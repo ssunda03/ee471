@@ -125,14 +125,14 @@ def main():
     init_robot(robot, traj_init)
     
     # Call the robot trajectory function with different traj_time values
-    traj_time = 10  # You can change this to any other value to test
+    traj_time = 10
     tstamp, jpos = run_robot_trajectory(robot, traj_time)
     create_joint_position_subplots(tstamp, jpos, traj_time)
     analyze_time_intervals(tstamp, traj_time)
     
     init_robot(robot, traj_init)
     
-    traj_time = 2  # You can change this to any other value to test
+    traj_time = 2
     tstamp, jpos = run_robot_trajectory(robot, traj_time)
     create_joint_position_subplots(tstamp, jpos, traj_time)
     analyze_time_intervals(tstamp, traj_time)
