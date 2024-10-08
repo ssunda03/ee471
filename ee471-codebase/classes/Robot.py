@@ -255,10 +255,10 @@ class Robot(OM_X_arm):
     
     def get_ee_pos(self, joint_angles):
         t_mat = self.get_fk(joint_angles)
-        ee_pos = [t_mat[0][3] * 1000, 
-                  t_mat[1][3] * 1000, 
-                  t_mat[2][3] * 1000, 
-                  joint_angles[0], 
-                  -(joint_angles[1] + joint_angles[2] + joint_angles[3])]
+        ee_pos = [float(t_mat[0][3] * 1000), 
+                  float(t_mat[1][3] * 1000), 
+                  float(t_mat[2][3] * 1000), 
+                  float(joint_angles[0]), 
+                  float(-(joint_angles[1] + joint_angles[2] + joint_angles[3]))]
         return ee_pos
         
