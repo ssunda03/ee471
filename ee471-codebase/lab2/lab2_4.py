@@ -4,6 +4,8 @@
 import sys
 import os
 import time
+import pickle
+import numpy as np
 
 # Add the 'classes' directory to the PYTHONPATH
 sys.path.append(os.path.join(os.path.dirname(__file__), '../classes'))
@@ -38,6 +40,14 @@ def run_robot_trajectory(robot, traj_time, joint_angles):
 
     time.sleep(1)  # Pause for a second before ending
 
+def save_to_pickle(data, filename):
+    with open(filename, 'wb') as file:
+        pickle.dump(data,file)
+
+def load_from_pickle(filename):
+    with open(filename, 'rb') as file:
+        return pickle.load(file)
+
 def main():
     # Initialize Robot instance
     robot = Robot()
@@ -54,7 +64,7 @@ def main():
 
     for point in joint_angles:
         run_robot_trajectory(point)
-        
+
 
 
 if __name__ == "__main__":
