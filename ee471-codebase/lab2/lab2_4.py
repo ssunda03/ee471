@@ -12,6 +12,12 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../classes'))
 
 from Robot import Robot
 
+data = {
+        'joint_angles' : [],
+        'ee_positions' : [],
+        'timestamps' : []
+    }
+
 def init_robot(robot, traj_init):
     # Setup robot
     traj_init = 1  # Defines the initial trajectory time
@@ -32,16 +38,22 @@ def run_robot_trajectory(robot, traj_time, joint_angles):
     elapsed_time = 0
 
     while elapsed_time < traj_time:
-        print(f"Transformation matrix for End Effector to Base @ {elapsed_time}\n")
-        print(robot.get_current_fk())
-        print(f"Current end effector position and orientation @ {elapsed_time}\n")
-        print(robot.get_ee_pos(robot.get_joints_readings()[0])) # Get end effector x,y,z pos and orientation
+        joints = robot.get_joints_readings()[0]
+        
+        data['joint_angles'].append(joints)
+        data['ee_positions'].append(robot.get_ee_pos(joints))
+        data['timestamps'].append(elapsed_time)
+        
+        print(f"elapsed time: {elapsed_time}")
+        print(f"current joint angles: {joints}")
+        print(f"current end effector position: {robot.get_ee_pos(joints)}")
+        
         elapsed_time = time.time() - start_time
 
     time.sleep(1)  # Pause for a second before ending
 
 def save_to_pickle(data, filename):
-    with open(filename, 'wb') as file:
+    with open(filename, 'ab') as file:
         pickle.dump(data,file)
 
 def load_from_pickle(filename):
@@ -59,11 +71,13 @@ def main():
     # about end effector position as well as the 
     # transformation matrix T4,0
 
-    traj_time = 3
+    traj_time = 5
     joint_angles = [[0, -45, 60, 50],[0, 10, 50, -45], [0, 10, 0, -80], [0, -45, 60, 50]] # Define waypoints
 
     for point in joint_angles:
-        run_robot_trajectory(point)
+        run_robot_trajectory(robot, traj_time, point)
+        
+    save_to_pickle(data, "datafile.pkl")
 
 
 
