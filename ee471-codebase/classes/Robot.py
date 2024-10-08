@@ -250,5 +250,15 @@ class Robot(OM_X_arm):
     def get_fk(self, joint_angles):
         return self.get_acc_mat(joint_angles)[3]
 
-
-
+    def get_current_fk(self):
+        return self.get_fk(self.get_joints_readings()[0])
+    
+    def get_ee_pos(self, joint_angles):
+        t_mat = self.get_fk(joint_angles)
+        ee_pos = [t_mat[0][3] * 1000, 
+                  t_mat[1][3] * 1000, 
+                  t_mat[2][3] * 1000, 
+                  joint_angles[0], 
+                  -(joint_angles[1] + joint_angles[2] + joint_angles[3])]
+        return ee_pos
+        

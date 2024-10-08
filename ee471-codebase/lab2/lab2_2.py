@@ -14,10 +14,13 @@ def main():
     joint_angles2 = [15, -45, -60, 90]
     joint_angles3 = [-90, 15, 30, -45]
     
+    print(f"joint_configuration: {joint_angles1}")
     print(robot.get_fk(joint_angles1))
     print("\n")
+    print(f"joint_configuration: {joint_angles2}")
     print(robot.get_fk(joint_angles2))
     print("\n")
+    print(f"joint_configuration: {joint_angles3}")
     print(robot.get_fk(joint_angles3))
 
 if __name__ == "__main__":
