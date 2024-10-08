@@ -50,15 +50,11 @@ def main():
     # transformation matrix T4,0
 
     traj_time = 3
-    joint_angles = [-90, 15, 30, -45] # Define waypoints
-    run_robot_trajectory(robot, traj_time, joint_angles)
-    
-    init_robot(robot, traj_init)
-    
-    joint_angles = [15, -45, -60, 90] # Define waypoints
-    run_robot_trajectory(robot, traj_time, joint_angles)
-    
-    init_robot(robot, traj_init)
+    joint_angles = [[0, -45, 60, 50],[0, 10, 50, -45], [0, 10, 0, -80], [0, -45, 60, 50]] # Define waypoints
+
+    for point in joint_angles:
+        run_robot_trajectory(point)
+        
 
 
 if __name__ == "__main__":
