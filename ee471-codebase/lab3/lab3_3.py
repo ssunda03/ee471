@@ -27,8 +27,8 @@ def run_robot_trajectory(robot, traj_time, joint_angles):
     robot.write_time(traj_time)  # Write trajectory time
     robot.write_joints(joint_angles)  # Write joint values
     
-    # start_time = time.time()  # Start timer
-    # elapsed_time = 0
+    start_time = time.time()  # Start timer
+    elapsed_time = 0
 
     while elapsed_time < traj_time:
     #     print(f"Transformation matrix for End Effector to Base @ {elapsed_time}\n")
@@ -66,18 +66,11 @@ def main():
     # Run robot trajectory using IK
 
     traj_time = 5
-
-    print()
-    run_robot_trajectory(robot, traj_time, joint_angles[0])
-    init_robot(robot, traj_init)
     
-    run_robot_trajectory(robot, traj_time, joint_angles[1])
-    init_robot(robot, traj_init)
+    for j in joint_angles:
+        run_robot_trajectory(robot, traj_time, j)
 
-    run_robot_trajectory(robot, traj_time, joint_angles[2])
     init_robot(robot, traj_init)
-
-    # Run robot trajectory using FK
 
 
 
