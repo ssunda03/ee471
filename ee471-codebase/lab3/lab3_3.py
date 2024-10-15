@@ -5,11 +5,28 @@ import sys
 import os
 import time
 import numpy as np
+import pickle
+import matplotlib.pyplot as plt
 
 # Add the 'classes' directory to the PYTHONPATH
 sys.path.append(os.path.join(os.path.dirname(__file__), '../classes'))
 
-from Robot import Robot
+data = {
+        'joint_angles' : [],
+        'ee_positions' : [],
+        'timestamps' : []
+}
+
+total_time = 0
+global_start_time = 0
+
+def save_to_pickle(data, filename):
+    with open(filename, 'wb') as file:
+        pickle.dump(data,file)
+
+def load_from_pickle(filename):
+    with open(filename, 'rb') as file:
+        return pickle.load(file)
 
 def init_robot(robot, traj_init):
     # Setup robot
@@ -31,15 +48,27 @@ def run_robot_trajectory(robot, traj_time, joint_angles):
     elapsed_time = 0
 
     while elapsed_time < traj_time:
-    #     print(f"Transformation matrix for End Effector to Base @ {elapsed_time}\n")
-    #     print(robot.get_current_fk())
-    #     print(f"Current end effector position and orientation @ {elapsed_time}\n")
-    #     print(robot.get_ee_pos(robot.get_joints_readings()[0])) # Get end effector x,y,z pos and orientation
+        joints = robot.get_joints_readings[0]
+
+        data['joint_angles'].append(joints)
+        data['ee_positions'].append(robot.get_ee_pos(joints))
+        data['timestamps'].append(total_time)
+        
+        print(f"elapsed time: {total_time}")
+        print(f"current joint angles: {joints}")
+        print(f"current end effector position: {robot.get_ee_pos(joints)}")
+
         elapsed_time = time.time() - start_time
+        total_time = time.time() - global_start_time
+
+
 
     time.sleep(1)  # Pause for a second before ending
 
 def main():
+    # Declare as global
+    global global_start_time
+
     # Initialize Robot instance
     robot = Robot()
 
@@ -47,30 +76,26 @@ def main():
     test_poses = [
         np.array([25, -100, 150, -60]),
         np.array([150, 80, 300, 0]),
-        np.array([250, -115, 75, -45])
+        np.array([250, -115, 75, -45]),
+        np.array([25, -100, 150, -60])
     ]
 
     joint_angles = [[round(i) for i in robot.get_ik(pose)] for pose in test_poses]
-
-    # print(f"Test poses: \n{test_poses}")
-    print(f"Joint angles:\n{joint_angles}\n")
-    
-    # fk_poses = [[round(j) for j in robot.get_ee_pos(joint_angle)] for joint_angle in joint_angles]
-    # print(f"FK poses:\n{fk_poses}")
-
 
     traj_init = 1
     
     init_robot(robot, traj_init)
 
     # Run robot trajectory using IK
-
     traj_time = 5
     
+    global_start_time = time.time()
     for j in joint_angles:
         run_robot_trajectory(robot, traj_time, j)
 
-    init_robot(robot, traj_init)
+    #.pkl stuff
+    save_to_pickle(data, "lab3.pkl")
+    
 
 
 
