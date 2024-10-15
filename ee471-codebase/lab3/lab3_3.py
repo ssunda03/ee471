@@ -8,8 +8,10 @@ import numpy as np
 import pickle
 import matplotlib.pyplot as plt
 
+
 # Add the 'classes' directory to the PYTHONPATH
 sys.path.append(os.path.join(os.path.dirname(__file__), '../classes'))
+from Robot import Robot
 
 data = {
         'joint_angles' : [],
@@ -40,7 +42,9 @@ def init_robot(robot, traj_init):
     time.sleep(traj_init)  # Wait for trajectory completion
 
 def run_robot_trajectory(robot, traj_time, joint_angles):
-
+    global global_start_time
+    global total_time
+    
     robot.write_time(traj_time)  # Write trajectory time
     robot.write_joints(joint_angles)  # Write joint values
     
@@ -48,7 +52,7 @@ def run_robot_trajectory(robot, traj_time, joint_angles):
     elapsed_time = 0
 
     while elapsed_time < traj_time:
-        joints = robot.get_joints_readings[0]
+        joints = robot.get_joints_readings()[0]
 
         data['joint_angles'].append(joints)
         data['ee_positions'].append(robot.get_ee_pos(joints))
