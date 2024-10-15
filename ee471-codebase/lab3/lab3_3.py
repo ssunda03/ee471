@@ -184,13 +184,13 @@ def main():
     # save_to_pickle(data, "lab3.pkl")
 
     # Load data
-    file_path = "./lab3.pkl"
+    file_path = "ee471-codebase/lab3/lab3.pkl"
     data = load_from_pickle(file_path)
 
     # Assume the data contains time, poses (x, y, z, orientation), and joint_angles
-    time = data['time']
-    poses = np.array(data['poses'])  # Shape: (n, 4) -> [x, y, z, orientation]
-    joint_angles_sensor = np.array(data['joint_angles_sensor'])  # Shape: (n, 4) -> [q1, q2, q3, q4]
+    time = data['timestamps']
+    poses = np.array(data['ee_positions'])  # Shape: (n, 4) -> [x, y, z, orientation]
+    joint_angles_sensor = np.array(data['joint_angles'])  # Shape: (n, 4) -> [q1, q2, q3, q4]
 
     # Create the plots
     plot_end_effector_pose(time, poses)
@@ -198,7 +198,6 @@ def main():
     plot_joint_angles_sensor_readings(time, joint_angles_sensor)
 
     # Assuming you have a robot object that can calculate IK
-    robot = Robot()
     plot_joint_angles_inverse_kinematics(robot, time, poses)
     
 
