@@ -1,4 +1,4 @@
-# file for 2_3 in lab 2
+# file for 3_3 in lab 3
 # les go
 
 import sys
@@ -30,12 +30,12 @@ def run_robot_trajectory(robot, traj_time, joint_angles):
     # start_time = time.time()  # Start timer
     # elapsed_time = 0
 
-    # while elapsed_time < traj_time:
+    while elapsed_time < traj_time:
     #     print(f"Transformation matrix for End Effector to Base @ {elapsed_time}\n")
     #     print(robot.get_current_fk())
     #     print(f"Current end effector position and orientation @ {elapsed_time}\n")
     #     print(robot.get_ee_pos(robot.get_joints_readings()[0])) # Get end effector x,y,z pos and orientation
-    #     elapsed_time = time.time() - start_time
+        elapsed_time = time.time() - start_time
 
     time.sleep(1)  # Pause for a second before ending
 
@@ -53,7 +53,7 @@ def main():
     joint_angles = [[round(i) for i in robot.get_ik(pose)] for pose in test_poses]
 
     # print(f"Test poses: \n{test_poses}")
-    # print(f"Joint angles:\n{joint_angles}\n")
+    print(f"Joint angles:\n{joint_angles}\n")
     
     # fk_poses = [[round(j) for j in robot.get_ee_pos(joint_angle)] for joint_angle in joint_angles]
     # print(f"FK poses:\n{fk_poses}")
