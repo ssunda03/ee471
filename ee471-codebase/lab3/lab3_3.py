@@ -43,39 +43,39 @@ def main():
     # Initialize Robot instance
     robot = Robot()
 
-    # Test poses for IK/FK testing
+    # Test poses for IK triangle movements
     test_poses = [
-        np.array([274, 0, 204, 0]),
-        np.array([16, 4, 336, 15]),
-        np.array([0, -270, 106, 0])
+        np.array([25, -100, 150, -60]),
+        np.array([150, 80, 300, 0]),
+        np.array([250, -115, 75, -45])
     ]
 
     joint_angles = [[round(i) for i in robot.get_ik(pose)] for pose in test_poses]
 
-    print(f"Test poses: \n{test_poses}")
-    print(f"Joint angles:\n{joint_angles}\n")
+    # print(f"Test poses: \n{test_poses}")
+    # print(f"Joint angles:\n{joint_angles}\n")
     
-    fk_poses = [[round(j) for j in robot.get_ee_pos(joint_angle)] for joint_angle in joint_angles]
-    print(f"FK poses:\n{fk_poses}")
+    # fk_poses = [[round(j) for j in robot.get_ee_pos(joint_angle)] for joint_angle in joint_angles]
+    # print(f"FK poses:\n{fk_poses}")
 
 
-    # traj_init = 1
+    traj_init = 1
     
-    # init_robot(robot, traj_init)
+    init_robot(robot, traj_init)
 
-    # # Run robot trajectory using IK
+    # Run robot trajectory using IK
 
-    # traj_time = 3
+    traj_time = 5
 
-    # print()
-    # run_robot_trajectory(robot, traj_time, joint_angles[0])
-    # init_robot(robot, traj_init)
+    print()
+    run_robot_trajectory(robot, traj_time, joint_angles[0])
+    init_robot(robot, traj_init)
     
-    # run_robot_trajectory(robot, traj_time, joint_angles[1])
-    # init_robot(robot, traj_init)
+    run_robot_trajectory(robot, traj_time, joint_angles[1])
+    init_robot(robot, traj_init)
 
-    # run_robot_trajectory(robot, traj_time, joint_angles[2])
-    # init_robot(robot, traj_init)
+    run_robot_trajectory(robot, traj_time, joint_angles[2])
+    init_robot(robot, traj_init)
 
     # Run robot trajectory using FK
 
