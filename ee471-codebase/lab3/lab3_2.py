@@ -50,12 +50,12 @@ def main():
         np.array([0, -270, 106, 0])
     ]
 
-    joint_angles = [robot.get_ik(pose) for pose in test_poses]
+    joint_angles = [[round(j) for j in robot.get_ik(pose)] for pose in test_poses]
 
-    print(f"Test poses: \n{test_poses}")
+    print(f"Test poses: \n{test_poses}\n")
     print(f"Joint angles:\n{joint_angles}\n")
     
-    fk_poses = [robot.get_fk(joint_angle) for joint_angle in joint_angles]
+    fk_poses = [[round(d) for d in robot.get_ee_pos(joint_angle)] for joint_angle in joint_angles]
     print(f"FK poses:\n{fk_poses}")
 
 
