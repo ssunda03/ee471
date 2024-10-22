@@ -4,7 +4,9 @@
 import sys
 import os
 import time
+import pickle
 import numpy as np
+import matplotlib.pyplot as plt
 
 # Add the 'classes' directory to the PYTHONPATH
 sys.path.append(os.path.join(os.path.dirname(__file__), '../classes'))
@@ -12,38 +14,43 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../classes'))
 from TrajPlanner import TrajPlanner
 from Robot import Robot
 
-def init_robot(robot, traj_init):
-    # Setup robot
-    traj_init = 1  # Defines the initial trajectory time
+def save_to_pickle(data, filename):
+    with open(filename, 'wb') as file:
+        pickle.dump(data,file)
 
+def load_from_pickle(filename):
+    with open(filename, 'rb') as file:
+        return pickle.load(file)
+
+def plot_3d_trajectory(poses):
+    x = poses[:, 0]  # X position (in mm)
+    y = poses[:, 1]  # Y position (in mm)
+    z = poses[:, 2]  # Z position (in mm)
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.plot(x, y, z, label='End-Effector Path', color='r')
+    
+    ax.set_xlabel('X (mm)')
+    ax.set_ylabel('Y (mm)')
+    ax.set_zlabel('Z (mm)')
+    ax.legend()
+    plt.title('3D Trajectory of End-Effector')
+    plt.show()
+
+def init_robot(robot, traj_init):
     robot.write_time(traj_init)  # Write trajectory time
     robot.write_motor_state(True)  # Write position mode
 
     # Program
-    robot.write_joints([0, 0, 0, 0])  # Write joints to zero position
+    joints = robot.get_ik([25, -100, 150, -60])
+    robot.write_joints(joints)  # Write joints to first setpoint
     time.sleep(traj_init)  # Wait for trajectory completion
-
-def run_robot_trajectory(robot, traj_time, joint_angles):
-
-    robot.write_time(traj_time)  # Write trajectory time
-    robot.write_joints(joint_angles)  # Write joint values
-    
-    # start_time = time.time()  # Start timer
-    # elapsed_time = 0
-
-    # while elapsed_time < traj_time:
-    #     print(f"Transformation matrix for End Effector to Base @ {elapsed_time}\n")
-    #     print(robot.get_current_fk())
-    #     print(f"Current end effector position and orientation @ {elapsed_time}\n")
-    #     print(robot.get_ee_pos(robot.get_joints_readings()[0])) # Get end effector x,y,z pos and orientation
-    #     elapsed_time = time.time() - start_time
-
-    # time.sleep(1)  # Pause for a second before ending
 
 def main():
     # Initialize Robot instance
     robot = Robot()
-    traj_init = 1
+    traj_init = 3 # Traj time
     init_robot(robot, traj_init)
 
     # Setpoints for trajectory
@@ -71,25 +78,49 @@ def main():
     num_waypoints = 998  # 998 intermediate waypoints
 
     # Generate cubic trajectory for each segment: Pose 1 -> Pose 2 -> Pose 3 -> Pose 1
-    trajectory = []
-    for i in range(len(setpoints_jointspace) - 1):
-        traj_segment = planner.get_cubic_traj(traj_time, num_waypoints)
-        trajectory.append(traj_segment)
-    
-    # Flatten the trajectory list into a single array
-    full_trajectory = np.vstack(trajectory)
+    trajectory = planner.get_cubic_traj(traj_time, num_waypoints)
+    time_step = trajectory[2,0] - trajectory[1,0]
 
-    # Calculate the delta times between consecutive waypoints
-    time_stamps = full_trajectory[:, 0]  # First column is time
-    delta_times = np.diff(time_stamps, prepend=0)  # Delta time between waypoints
+    # Pre-allocate data
+    data_time = np.zeros(num_waypoints+2)
+    data_ee_poses = np.zeros((num_waypoints+2, 4))
+    data_q = np.zeros((num_waypoints+2, 4))
+    count = 0
 
-    # Execute the full trajectory using run_robot_trajectory
-    for i, waypoint in enumerate(full_trajectory):
-        delta_time = delta_times[i]        # Get the delta time for this step
-        joint_angles = waypoint[1:]        # Remaining columns are joint angles
+    robot.write_time(time_step)
+    start_time = time.time()
 
-        # Use the provided function to run the robot trajectory with delta time
-        run_robot_trajectory(robot, delta_time, joint_angles)
+    # Move the robot along all trajectories
+    for i in range(1, len(trajectory)):
+        robot.write_joints(trajectory[i, 1:])  # Write joint values
+        # Collect a reading periodically until the waypoint is reached
+        while time.time() - start_time < (i * time_step):
+            data_q[count, :] = robot.get_joints_readings()[0, :]
+            data_time[count] = time.time() - start_time
+            data_ee_poses[count, :] = robot.get_ee_pos(data_q[count, :])[0:4]
+            count += 1
+
+    # Trim unused space in data
+    data_time = data_time[:count]
+    data_ee_poses = data_ee_poses[:count, :]
+    data_q = data_q[:count, :]
+
+    plot_3d_trajectory(data_ee_poses)
+
+
+    # for waypoint in range(len(trajectory) - 1):  # Loop over waypoints in the segment
+    #     # Calculate the delta time between consecutive waypoints
+    #     cur_traj_time = trajectory[waypoint + 1][0] - trajectory[waypoint][0]
+    #     joint_angles = trajectory[waypoint][1:]  # Extract joint angles
+
+    #     # Run the robot trajectory for this waypoint
+    #     run_robot_trajectory(robot, cur_traj_time, joint_angles)
+
+    # poses = np.array(data['ee_positions'])  # Shape: (n, 4) -> [x, y, z, orientation]
+    # plot_3d_trajectory(data_ee_poses)
+
+
+
 
 if __name__ == "__main__":
     main()
