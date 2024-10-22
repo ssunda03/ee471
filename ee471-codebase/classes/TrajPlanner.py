@@ -90,6 +90,7 @@ class TrajPlanner:
 
         time = np.linspace(0, traj_time*(len(setpoints)-1), waypoints_list.shape[0])
         waypoints_list[:, 0] = time
+        # print(waypoints_list)
         return waypoints_list
 
 

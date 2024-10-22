@@ -44,7 +44,7 @@ def main():
     # Initialize Robot instance
     robot = Robot()
     traj_init = 1
-    robot.init_robot(traj_init)
+    init_robot(robot, traj_init)
 
     # Setpoints for trajectory
     setpoints_taskspace = [
@@ -73,10 +73,23 @@ def main():
     # Generate cubic trajectory for each segment: Pose 1 -> Pose 2 -> Pose 3 -> Pose 1
     trajectory = []
     for i in range(len(setpoints_jointspace) - 1):
-        traj_segment = planner.get_cubic_traj(traj_time=traj_time, num_waypoints=num_waypoints)
+        traj_segment = planner.get_cubic_traj(traj_time, num_waypoints)
         trajectory.append(traj_segment)
     
+    # Flatten the trajectory list into a single array
+    full_trajectory = np.vstack(trajectory)
 
+    # Calculate the delta times between consecutive waypoints
+    time_stamps = full_trajectory[:, 0]  # First column is time
+    delta_times = np.diff(time_stamps, prepend=0)  # Delta time between waypoints
+
+    # Execute the full trajectory using run_robot_trajectory
+    for i, waypoint in enumerate(full_trajectory):
+        delta_time = delta_times[i]        # Get the delta time for this step
+        joint_angles = waypoint[1:]        # Remaining columns are joint angles
+
+        # Use the provided function to run the robot trajectory with delta time
+        run_robot_trajectory(robot, delta_time, joint_angles)
 
 if __name__ == "__main__":
     main()
