@@ -20,7 +20,13 @@
 # cubic_traj = trajectories.get_cubic_traj(traj_time=5, points_num=10)
 # print(cubic_traj)
 
+import sys
+import os
 import numpy as np
+
+# Add the 'classes' directory to the PYTHONPATH
+sys.path.append(os.path.join(os.path.dirname(__file__), '../classes'))
+
 from TrajPlanner import TrajPlanner
 
 # Define the setpoints as a numpy array
