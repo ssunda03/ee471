@@ -54,6 +54,70 @@ def plot_time_series_of_joint_angles(data):
     # Show the plot
     plt.show()
 
+def plot_time_series_of_ee_pos(data):
+    plt.plot(data["time"], data["ee"][:,0], label='x', linestyle='-', color='b')
+    plt.plot(data["time"], data["ee"][:,1], label='y', linestyle='-', color='g')
+    plt.plot(data["time"], data["ee"][:,2], label='z', linestyle='-', color='r')
+    plt.plot(data["time"], data["ee"][:,3], label='a', linestyle='-', color='m')
+
+    # Adding labels and title
+    plt.title('End-Effector Pose Over Time')
+    plt.xlabel('Time (seconds)')
+    plt.ylabel('Pose Parameters')
+    plt.legend()
+    plt.grid(True)
+
+    # Show the plot
+    plt.show()
+
+def plot_time_series_of_ee_velocity(data):
+
+    # Compute the time differences and joint angle differences
+    time_diffs = np.diff(data["time"])
+    x_velocities = np.diff(data["ee"][:,0]) / time_diffs
+    y_velocities = np.diff(data["ee"][:,1]) / time_diffs
+    z_velocities = np.diff(data["ee"][:,2]) / time_diffs
+    a_velocities = np.diff(data["ee"][:,3]) / time_diffs
+    
+    plt.plot(data["time"][1:], x_velocities, label='x', linestyle='-', color='b')
+    plt.plot(data["time"][1:], y_velocities, label='y', linestyle='-', color='g')
+    plt.plot(data["time"][1:], z_velocities, label='z', linestyle='-', color='r')
+    plt.plot(data["time"][1:], a_velocities, label='a', linestyle='-', color='m')
+
+    # Adding labels and title
+    plt.title('End-Effector Velocity Over Time')
+    plt.xlabel('Time (seconds)')
+    plt.ylabel('Velocity Parameters')
+    plt.legend()
+    plt.grid(True)
+
+    # Show the plot
+    plt.show()
+
+def plot_time_series_of_ee_accel(data):
+
+    # Compute the time differences and joint angle differences
+    time_diffs = np.diff(data["time"])
+    x_accel = np.diff(np.diff(data["ee"][:,0])) / time_diffs[:-1]
+    y_accel = np.diff(np.diff(data["ee"][:,1])) / time_diffs[:-1]
+    z_accel = np.diff(np.diff(data["ee"][:,2])) / time_diffs[:-1]
+    a_accel = np.diff(np.diff(data["ee"][:,3])) / time_diffs[:-1]
+    
+    plt.plot(data["time"][2:], x_accel, label='x', linestyle='-', color='b')
+    plt.plot(data["time"][2:], y_accel, label='y', linestyle='-', color='g')
+    plt.plot(data["time"][2:], z_accel, label='z', linestyle='-', color='r')
+    plt.plot(data["time"][2:], a_accel, label='a', linestyle='-', color='m')
+
+    # Adding labels and title
+    plt.title('End-Effector Acceleration Over Time')
+    plt.xlabel('Time (seconds)')
+    plt.ylabel('Acceleration Parameters')
+    plt.legend()
+    plt.grid(True)
+
+    # Show the plot
+    plt.show()
+
 def init_robot(robot, traj_init):
     robot.write_time(traj_init)  # Write trajectory time
     robot.write_motor_state(True)  # Write position mode
@@ -112,20 +176,19 @@ def main():
     data_time = data_time[:count]
     data_ee_poses = data_ee_poses[:count, :]
     data_q = data_q[:count, :]
-    plot_3d_trajectory(data_ee_poses)
     
-    # data = {
-    #     "joints" : data_q,
-    #     "ee" : data_ee_poses,
-    #     "time" : data_time
-    # }
-    
-    # data = load_from_pickle("lab4_cubic_traj.pkl")
-
-    # plot_3d_trajectory(data["ee"])
-    # plot_time_series_of_joint_angles(data)
-
-
+    data = {
+        "joints" : data_q,
+        "ee" : data_ee_poses,
+        "time" : data_time
+    }
+    save_to_pickle(data, "lab4_quintic_traj.pkl")
+    data = load_from_pickle("lab4_quintic_traj.pkl")
+    plot_3d_trajectory(data["ee"])
+    plot_time_series_of_joint_angles(data)
+    plot_time_series_of_ee_pos(data)
+    plot_time_series_of_ee_velocity(data)
+    plot_time_series_of_ee_accel(data)
 
 
 if __name__ == "__main__":
