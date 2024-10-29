@@ -317,3 +317,7 @@ class Robot(OM_X_arm):
             jacobian[:,i] = np.hstack((np.cross(z, o4-o), z))
             
         return jacobian
+    
+    def get_forward_diff_kinematics(self, joint_angles, joint_velocities):
+        joint_vel_deg = np.radians(np.array(joint_velocities))
+        return np.dot(self.get_jacobian(joint_angles), joint_vel_deg.T)
