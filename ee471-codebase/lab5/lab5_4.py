@@ -14,11 +14,6 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../classes'))
 from TrajPlanner import TrajPlanner
 from Robot import Robot
 
-data = {
-    "time" : [],
-    "joint_angles" : []
-    
-}
 
 def save_to_pickle(data, filename):
     with open(filename, 'wb') as file:
@@ -42,29 +37,51 @@ def plot_3d_trajectory(poses):
     ax.set_zlabel('Z (mm)')
     ax.legend()
     plt.title('3D Trajectory of End-Effector')
+
+    plt.savefig('./ee471-codebase/lab5/plots/3D_Trajectory.png')  # Saves in a "plots" subdirectory of the script’s location
     plt.show()
 
-def plot_time_series_of_joint_angles(data):
-    plt.plot(data["time"], data["joints"][:,0], label='Joint Angle q1', linestyle='-', color='b')
-    plt.plot(data["time"], data["joints"][:,1], label='Joint Angle q2', linestyle='--', color='g')
-    plt.plot(data["time"], data["joints"][:,2], label='Joint Angle q3', linestyle='-.', color='r')
-    plt.plot(data["time"], data["joints"][:,3], label='Joint Angle q4', linestyle=':', color='m')
+def plot_time_series_of_joint_velocities(data):
+    plt.plot(data["time"], data["q_vel"][:,0], label='Joint Vel q1', linestyle='-', color='b')
+    plt.plot(data["time"], data["q_vel"][:,1], label='Joint Vel q2', linestyle='--', color='g')
+    plt.plot(data["time"], data["q_vel"][:,2], label='Joint Vel q3', linestyle='-.', color='r')
+    plt.plot(data["time"], data["q_vel"][:,3], label='Joint Vel q4', linestyle=':', color='m')
 
     # Adding labels and title
-    plt.title('Joint Angles Over Time')
+    plt.title('Joint Velocities Over Time')
     plt.xlabel('Time (seconds)')
-    plt.ylabel('Joint Angles (degrees)')
+    plt.ylabel('Joint Velocities (degrees/sec)')
     plt.legend()
     plt.grid(True)
+
+    plt.savefig('./ee471-codebase/lab5/plots/Time_vs_Joint_Velocities.png')  # Saves in a "plots" subdirectory of the script’s location
+
+    # Show the plot
+    plt.show()
+    
+def plot_time_series_of_ee_velocities(data):
+    plt.plot(data["time"], data["ee_vel"][:,0], label='X dot', linestyle='-', color='b')
+    plt.plot(data["time"], data["ee_vel"][:,1], label='Y dot', linestyle='--', color='g')
+    plt.plot(data["time"], data["ee_vel"][:,2], label='Z dot', linestyle='-.', color='r')
+    plt.plot(data["time"], data["ee_vel"][:,3], label='A dot', linestyle=':', color='m')
+
+    # Adding labels and title
+    plt.title('EE Velocities Over Time')
+    plt.xlabel('Time (seconds)')
+    plt.ylabel('EE Velocities')
+    plt.legend()
+    plt.grid(True)
+
+    plt.savefig('./ee471-codebase/lab5/plots/Time_vs_EE_Velocities.png')  # Saves in a "plots" subdirectory of the script’s location
 
     # Show the plot
     plt.show()
 
 def plot_time_series_of_ee_pos(data):
-    plt.plot(data["time"], data["ee"][:,0], label='x', linestyle='-', color='b')
-    plt.plot(data["time"], data["ee"][:,1], label='y', linestyle='-', color='g')
-    plt.plot(data["time"], data["ee"][:,2], label='z', linestyle='-', color='r')
-    plt.plot(data["time"], data["ee"][:,3], label='a', linestyle='-', color='m')
+    plt.plot(data["time"], data["ee_pos"][:,0], label='x', linestyle='-', color='b')
+    plt.plot(data["time"], data["ee_pos"][:,1], label='y', linestyle='-', color='g')
+    plt.plot(data["time"], data["ee_pos"][:,2], label='z', linestyle='-', color='r')
+    plt.plot(data["time"], data["ee_pos"][:,3], label='a', linestyle='-', color='m')
 
     # Adding labels and title
     plt.title('End-Effector Pose Over Time')
@@ -73,53 +90,7 @@ def plot_time_series_of_ee_pos(data):
     plt.legend()
     plt.grid(True)
 
-    # Show the plot
-    plt.show()
-
-def plot_time_series_of_ee_velocity(data):
-
-    # Compute the time differences and joint angle differences
-    time_diffs = np.diff(data["time"])
-    x_velocities = np.diff(data["ee"][:,0]) / time_diffs
-    y_velocities = np.diff(data["ee"][:,1]) / time_diffs
-    z_velocities = np.diff(data["ee"][:,2]) / time_diffs
-    a_velocities = np.diff(data["ee"][:,3]) / time_diffs
-    
-    plt.plot(data["time"][1:], x_velocities, label='x', linestyle='-', color='b')
-    plt.plot(data["time"][1:], y_velocities, label='y', linestyle='-', color='g')
-    plt.plot(data["time"][1:], z_velocities, label='z', linestyle='-', color='r')
-    plt.plot(data["time"][1:], a_velocities, label='a', linestyle='-', color='m')
-
-    # Adding labels and title
-    plt.title('End-Effector Velocity Over Time')
-    plt.xlabel('Time (seconds)')
-    plt.ylabel('Velocity Parameters')
-    plt.legend()
-    plt.grid(True)
-
-    # Show the plot
-    plt.show()
-
-def plot_time_series_of_ee_accel(data):
-
-    # Compute the time differences and joint angle differences
-    time_diffs = np.diff(data["time"])
-    x_accel = np.diff(np.diff(data["ee"][:,0])) / time_diffs[:-1]
-    y_accel = np.diff(np.diff(data["ee"][:,1])) / time_diffs[:-1]
-    z_accel = np.diff(np.diff(data["ee"][:,2])) / time_diffs[:-1]
-    a_accel = np.diff(np.diff(data["ee"][:,3])) / time_diffs[:-1]
-    
-    plt.plot(data["time"][2:], x_accel, label='x', linestyle='-', color='b')
-    plt.plot(data["time"][2:], y_accel, label='y', linestyle='-', color='g')
-    plt.plot(data["time"][2:], z_accel, label='z', linestyle='-', color='r')
-    plt.plot(data["time"][2:], a_accel, label='a', linestyle='-', color='m')
-
-    # Adding labels and title
-    plt.title('End-Effector Acceleration Over Time')
-    plt.xlabel('Time (seconds)')
-    plt.ylabel('Acceleration Parameters')
-    plt.legend()
-    plt.grid(True)
+    plt.savefig('./ee471-codebase/lab5/plots/Time_vs_EE_Position.png')  # Saves in a "plots" subdirectory of the script’s location
 
     # Show the plot
     plt.show()
@@ -154,6 +125,16 @@ def main():
     speed = 50  # Desired speed in mm/s
     tolerance = 10  # Tolerance in mm for reaching each target
 
+    # Pre-allocate data
+    data_time = np.zeros(400)
+    data_ee_poses = np.zeros((400, 4))
+    data_q_vel = np.zeros((400, 4))
+    data_ee_vel = np.zeros((400, 4))
+    count = 0
+
+    # Start time
+    start_time = time.time()
+
     for i in range(len(setpoints_taskspace) - 1):
         # Define target positions
         target_pose = setpoints_taskspace[i + 1]
@@ -162,9 +143,14 @@ def main():
         
         # Loop to control robot velocity to reach each target
         while distance_to_target > tolerance:
+            data_time[count] = time.time() - start_time # Log Time
+
             posvel = robot.get_joints_readings()[:2, :]
             # Get current end-effector position
-            ee_pos = robot.get_ee_pos(posvel[0])[:3]
+            full_ee_pos = robot.get_ee_pos(posvel[0])
+            ee_pos = full_ee_pos[:3]
+            data_ee_poses[count][:3] = ee_pos
+            data_ee_poses[count][-1] = full_ee_pos[-1]
 
             # Calculate the vector to the target and its distance
             vector_to_target = np.array(target_pose[:3]) - np.array(ee_pos)
@@ -178,14 +164,17 @@ def main():
             jacobian = robot.get_jacobian(posvel[0])
             translational_jacobian = jacobian[:3, :]  # Use the top 3x4 portion for translational motion
             joint_velocities = np.dot(np.linalg.pinv(translational_jacobian), task_space_velocity.T)
+            data_q_vel[count] = joint_velocities # Store commanded velocities
 
-            actual_velocities = robot.get_forward_diff_kinematics(
+            ee_velocities = robot.get_forward_diff_kinematics(
                 posvel[0],
                 posvel[1])  # Joint velocities in deg/s
+            data_ee_vel[count][:3] = ee_velocities[:3] # Store EE velocities
+            data_ee_vel[count][-1] = 0 # Pitch always 0
 
             # Optional: Print debug info or call get_forward_diff_kinematics() for verification
             print(f"Moving to target {i + 1}, distance: {distance_to_target:.2f} mm")
-            print(f"Calculated velocity: {joint_velocities} mm/s, actual velocity: {actual_velocities} mm/s")
+            print(f"Calculated velocity: {joint_velocities} mm/s, actual velocity: {posvel[1]} mm/s")
             
 
             # Safety: Check the maximum allowable velocity
@@ -196,12 +185,33 @@ def main():
 
             # Write the computed joint velocities to the robot
             robot.write_velocities(joint_velocities)
+            count += 1
         
         print(f"waypoint {i+1} reached")
             
     # Zero all joint velocities after reaching the final target
     robot.write_velocities([0, 0, 0, 0])
     print("Motion completed successfully.")
+
+        # Trim unused space in data
+    data_time = data_time[:count]
+    data_ee_poses = data_ee_poses[:count, :]
+    data_q_vel = data_q_vel[:count, :]
+    data_ee_vel = data_ee_vel[:count, :]
+    
+    data = {
+        "time": data_time,
+        "ee_pos": data_ee_poses,
+        "q_vel": data_q_vel,
+        "ee_vel": data_ee_vel
+    }
+
+    save_to_pickle(data, "lab5_velocity_kinematics.pkl")
+    data = load_from_pickle("lab5_velocity_kinematics.pkl")
+    plot_3d_trajectory(data["ee_pos"])
+    plot_time_series_of_ee_pos(data)
+    plot_time_series_of_joint_velocities(data)
+    plot_time_series_of_ee_velocities(data)
 
 if __name__ == "__main__":
     main()
