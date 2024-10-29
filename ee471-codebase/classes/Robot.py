@@ -31,17 +31,11 @@ class Robot(OM_X_arm):
         # change here or call writeTime in scripts to change
         self.write_time(5)
 
-        # self.dh_table = np.array(
-        #     [(lambda theta: theta),                                 0.077,  0,      -np.pi/2],
-        #     [(lambda theta: theta - (np.pi/2 - np.arcsin(24/130))), 0,      0.13,   0],
-        #     [(lambda theta: theta + (np.pi/2 - np.arcsin(24/130))), 0,      0.124,  0],
-        #     [(lambda theta: theta),                                 0,      0.126,  0]
-        # )
         self.dh_table = np.array([
-            [0,                                 0.077,  0,      -np.pi/2],
-            [-(np.pi/2 - np.arcsin(24/130)),    0,      0.13,   0],
-            [(np.pi/2 - np.arcsin(24/130)),     0,      0.124,  0],
-            [0,                                 0,      0.126,  0]
+            [0,                                 77,  0,  -np.pi/2],
+            [-(np.pi/2 - np.arcsin(24/130)),    0,   130, 0],
+            [(np.pi/2 - np.arcsin(24/130)),     0,   124, 0],
+            [0,                                 0,   126, 0]
         ])
 
     """
@@ -307,3 +301,19 @@ class Robot(OM_X_arm):
         joint_angles[3] = -ee_pos[3] - joint_angles[1] - joint_angles[2]
 
         return joint_angles
+    
+    def get_jacobian(self, joint_angles):
+        jacobian = np.zeros((6, 4))
+        acc_mat = self.get_acc_mat(joint_angles)
+        
+        z0 = np.array([0, 0, 1])
+        
+        o4 = acc_mat[-1][:-1,-1]
+        jacobian[:,0] = np.hstack((np.cross(z0, o4),z0))
+        
+        for i in range(1, len(joint_angles)):
+            z = acc_mat[i-1][:-1,2]
+            o = acc_mat[i-1][:-1,3]
+            jacobian[:,i] = np.hstack((np.cross(z, o4-o), z))
+            
+        return jacobian
