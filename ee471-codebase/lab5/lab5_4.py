@@ -14,6 +14,12 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../classes'))
 from TrajPlanner import TrajPlanner
 from Robot import Robot
 
+data = {
+    "time" : [],
+    "joint_angles" : []
+    
+}
+
 def save_to_pickle(data, filename):
     with open(filename, 'wb') as file:
         pickle.dump(data,file)
@@ -146,42 +152,41 @@ def main():
 
     # Define constants
     speed = 50  # Desired speed in mm/s
-    tolerance = 5  # Tolerance in mm for reaching each target
+    tolerance = 10  # Tolerance in mm for reaching each target
 
     for i in range(len(setpoints_taskspace) - 1):
-        # Define current and target positions
-        current_pose = setpoints_taskspace[i]
+        # Define target positions
         target_pose = setpoints_taskspace[i + 1]
 
+        distance_to_target = tolerance + 100
+        
         # Loop to control robot velocity to reach each target
-        while True:
+        while distance_to_target > tolerance:
+            posvel = robot.get_joints_readings()[:2, :]
             # Get current end-effector position
-            ee_pos = robot.get_ee_pos(robot.get_joints_readings()[0, :])[:3]
+            ee_pos = robot.get_ee_pos(posvel[0])[:3]
 
             # Calculate the vector to the target and its distance
             vector_to_target = np.array(target_pose[:3]) - np.array(ee_pos)
             distance_to_target = np.linalg.norm(vector_to_target)
-
-            # Check if within tolerance
-            if distance_to_target <= tolerance:
-                print(f"Reached target {i + 1}")
-                break
 
             # Calculate the unit direction vector and scale by the constant speed
             unit_vector = vector_to_target / distance_to_target
             task_space_velocity = unit_vector * speed
 
             # Compute joint velocities via inverse velocity kinematics
-            jacobian = robot.get_jacobian(robot.get_joints_readings()[0, :])
+            jacobian = robot.get_jacobian(posvel[0])
             translational_jacobian = jacobian[:3, :]  # Use the top 3x4 portion for translational motion
             joint_velocities = np.dot(np.linalg.pinv(translational_jacobian), task_space_velocity.T)
 
-            # Write the computed joint velocities to the robot
-            robot.write_velocities(joint_velocities)
+            actual_velocities = robot.get_forward_diff_kinematics(
+                posvel[0],
+                posvel[1])  # Joint velocities in deg/s
 
             # Optional: Print debug info or call get_forward_diff_kinematics() for verification
-            actual_velocities = robot.get_joints_readings()[1, :]  # Joint velocities in deg/s
             print(f"Moving to target {i + 1}, distance: {distance_to_target:.2f} mm")
+            print(f"Calculated velocity: {joint_velocities} mm/s, actual velocity: {actual_velocities} mm/s")
+            
 
             # Safety: Check the maximum allowable velocity
             if np.any(np.abs(task_space_velocity) > 100):
@@ -189,6 +194,11 @@ def main():
                 robot.write_velocities([0, 0, 0, 0])  # Stop the robot
                 break
 
+            # Write the computed joint velocities to the robot
+            robot.write_velocities(joint_velocities)
+        
+        print(f"waypoint {i+1} reached")
+            
     # Zero all joint velocities after reaching the final target
     robot.write_velocities([0, 0, 0, 0])
     print("Motion completed successfully.")
