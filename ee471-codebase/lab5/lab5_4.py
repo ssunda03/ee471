@@ -156,11 +156,11 @@ def main():
         # Loop to control robot velocity to reach each target
         while True:
             # Get current end-effector position
-            ee_pos = robot.get_ee_pos(robot.get_joints_readings()[0])[:3]
+            ee_pos = robot.get_ee_pos(robot.get_joints_readings()[0, :])[:3]
 
             # Calculate the vector to the target and its distance
-            direction_vector = np.array(target_pose[:3]) - np.array(ee_pos)
-            distance_to_target = np.linalg.norm(direction_vector)
+            vector_to_target = np.array(target_pose[:3]) - np.array(ee_pos)
+            distance_to_target = np.linalg.norm(vector_to_target)
 
             # Check if within tolerance
             if distance_to_target <= tolerance:
@@ -168,19 +168,19 @@ def main():
                 break
 
             # Calculate the unit direction vector and scale by the constant speed
-            unit_vector = direction_vector / distance_to_target
+            unit_vector = vector_to_target / distance_to_target
             task_space_velocity = unit_vector * speed
 
             # Compute joint velocities via inverse velocity kinematics
-            jacobian = robot.get_jacobian(robot.get_joints_readings()[0])
+            jacobian = robot.get_jacobian(robot.get_joints_readings()[0, :])
             translational_jacobian = jacobian[:3, :]  # Use the top 3x4 portion for translational motion
-            joint_velocities = np.dot(np.linalg.pinv(translational_jacobian), task_space_velocity)
+            joint_velocities = np.dot(np.linalg.pinv(translational_jacobian), task_space_velocity.T)
 
             # Write the computed joint velocities to the robot
             robot.write_velocities(joint_velocities)
 
             # Optional: Print debug info or call get_forward_diff_kinematics() for verification
-            actual_velocities = robot.get_joints_readings()[1]  # Joint velocities in deg/s
+            actual_velocities = robot.get_joints_readings()[1, :]  # Joint velocities in deg/s
             print(f"Moving to target {i + 1}, distance: {distance_to_target:.2f} mm")
 
             # Safety: Check the maximum allowable velocity
@@ -188,8 +188,6 @@ def main():
                 print("Error: Exceeding maximum task-space velocity limit.")
                 robot.write_velocities([0, 0, 0, 0])  # Stop the robot
                 break
-
-            time.sleep(0.1)  # Control loop delay for smooth operation
 
     # Zero all joint velocities after reaching the final target
     robot.write_velocities([0, 0, 0, 0])
