@@ -309,15 +309,14 @@ class Robot(OM_X_arm):
         z0 = np.array([0, 0, 1])
         
         o4 = acc_mat[-1][:-1,-1]
-        jacobian[:,0] = np.hstack((np.cross(z0, o4),z0))
+        jacobian[:,0] = np.hstack((np.radians(np.cross(z0, o4)),z0))
         
         for i in range(1, len(joint_angles)):
             z = acc_mat[i-1][:-1,2]
             o = acc_mat[i-1][:-1,3]
-            jacobian[:,i] = np.hstack((np.cross(z, o4-o), z))
+            jacobian[:,i] = np.hstack((np.radians(np.cross(z, o4-o)), z))
             
         return jacobian
     
     def get_forward_diff_kinematics(self, joint_angles, joint_velocities):
-        joint_vel_deg = np.radians(np.array(joint_velocities))
-        return np.dot(self.get_jacobian(joint_angles), joint_vel_deg.T)
+        return np.dot(self.get_jacobian(joint_angles), joint_velocities.T)
