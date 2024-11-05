@@ -7,7 +7,7 @@ import sys
 import os
 
 # Add the 'classes' directory to the PYTHONPATH
-sys.path.append(os.path.join(os.path.dirname(__file__), './classes'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '../classes'))
 
 import numpy as np
 import cv2
