@@ -55,16 +55,13 @@ def main():
                 distance = np.linalg.norm(tvec)  # Distance in mm
                 
                 # Calculate orientation angles (roll, pitch, yaw) from rotation matrix
-                rvec, _ = cv2.Rodrigues(rot_matrix)
-                roll = np.degrees(rvec[0][0])
-                pitch = np.degrees(rvec[1][0])
-                yaw = np.degrees(rvec[2][0])
+                rpy_angles = cv2.RQDecomp3x3(rot_matrix)[0] # in degrees btw
                 
                 # Print the tag information every 10 frames
                 if counter % 10 == 0:
                     print(f"Tag ID: {tag.tag_id}")
                     print(f"Distance: {distance:.2f} mm")
-                    print(f"Orientation: Roll={roll:.2f}, Pitch={pitch:.2f}, Yaw={yaw:.2f} degrees")
+                    print(f"Orientation: Roll={rpy_angles[0]:.2f}, Pitch={rpy_angles[1]:.2f}, Yaw={rpy_angles[2]:.2f} degrees")
                     print(f"Position: X={tvec[0][0]:.2f}, Y={tvec[1][0]:.2f}, Z={tvec[2][0]:.2f} mm\n")
                     
             # Increment counter
