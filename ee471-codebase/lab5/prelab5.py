@@ -61,20 +61,23 @@ def get_jacobian(joint_angles):
     z0 = np.array([0, 0, 1])
     
     o4 = acc_mat[-1][:-1,-1]
-    jacobian[:,0] = np.hstack((np.cross(z0, o4),z0))
+    jacobian[:,0] = np.hstack((np.radians(np.cross(z0, o4)),z0))
     
     for i in range(1, len(joint_angles)):
         z = acc_mat[i-1][:-1,2]
         o = acc_mat[i-1][:-1,3]
-        jacobian[:,i] = np.hstack((np.cross(z, o4-o), z))
+        jacobian[:,i] = np.hstack((np.radians(np.cross(z, o4-o)), z))
         
     return jacobian
 
 def main():
-    j = get_jacobian([0, -10.62, -79.38, 0])
-    det = np.linalg.det(j[:3,:3])
-    print(j)
-    print(det)
+    configs = [[0, -10.62, -79.38, 0],[0, 0, 0, 0]]
+    for c in configs:
+        j = get_jacobian(c)
+        det = np.linalg.det(j[:3,:3])
+        print(f'jacobian for {c}:')
+        print(j)
+        print(f'det: {det}')
     return
 
 if __name__ == "__main__":
