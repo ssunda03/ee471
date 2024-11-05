@@ -7,13 +7,13 @@ import sys
 import os
 import numpy as np
 import cv2
-from Realsense import Realsense
-from AprilTags import AprilTags
 
 # Add the 'classes' directory to the PYTHONPATH
 sys.path.append(os.path.join(os.path.dirname(__file__), '../classes'))
 
-from prelab import point_registration  # Import your existing point_registration function
+from Realsense import Realsense
+from AprilTags import AprilTags
+from prelab import point_registration, rmse  # Import your existing point_registration function
 
 def main():
     try:
@@ -25,11 +25,20 @@ def main():
 
         # Step ii. Define known 3D points in robot base frame
         robot_points = np.array([
-            [80, -90, 0],  # Replace with all measured points for each tag
-
-            # Add all remaining points here
-            
+            [66, -90, 0],
+            [66, -30, 0],
+            [66, 30, 0],
+            [66, 90, 0],
+            [126, -90, 0],
+            [126, -30, 0],
+            [126, 30, 0],
+            [126, 90, 0],
+            [186, -90, 0],
+            [186, -30, 0],
+            [186, 30, 0],
+            [186, 90, 0],
         ]).T
+
         robot_points = np.vstack((robot_points, np.ones((1, robot_points.shape[1]))))  # Convert to homogeneous coordinates
         
         points_camera = np.zeros_like(robot_points)  # Empty array for camera measurements
@@ -46,18 +55,15 @@ def main():
             
             # Detect AprilTags in the frame
             tags = detector.detect_tags(color_frame)
-            if len(tags) < robot_points.shape[1]:  # Ensure all tags are visible
-                continue
             
             tags.sort(key=lambda x: x.tag_id)  # Sort tags by ID for correct correspondence
 
-            for idx, tag in enumerate(tags):
+            for index, tag in enumerate(tags):
                 corners = tag.corners
                 rot_matrix, tvec = detector.get_tag_pose(corners, intrinsics, TAG_SIZE)
 
                 if tvec is not None:
-                    tvec_mm = tvec * 1000  # Convert from meters to mm
-                    measurements_list[idx].append(tvec_mm.reshape(3))  # Store translation in mm
+                    measurements_list[index].append(tvec.reshape(3))  # Store translation in mm
 
             # Visualize tag detection
             for tag in tags:
@@ -74,16 +80,15 @@ def main():
         points_camera[3, :] = 1  # Homogeneous coordinates
 
         # Step iv. Calculate transformation using point_registration
-        T_camera_to_robot = point_registration(points_camera, robot_points)
+        T_camera_to_robot = point_registration(points_camera[:3,:], robot_points[:3,:])
         
         # Step v. Calculate and display calibration error
         transformed_points = T_camera_to_robot @ points_camera
-        error = np.linalg.norm(transformed_points[:3, :] - robot_points[:3, :], axis=0)
-        avg_error = np.mean(error)
-        print("Transformation Matrix (Camera to Robot):\n", T_camera_to_robot)
-        print(f"Average Calibration Error: {avg_error:.2f} mm")
+        rmse_error = rmse(transformed_points, robot_points)
+        print(f"RMSE Calibration Error: {rmse_error:.2f} mm")
 
-        # Step vi. Save transformation matrix
+        # Step vi. Save transformation matrix, print transformation matrix
+        print("Transformation Matrix (Camera to Robot):\n", T_camera_to_robot)
         np.save("camera_robot_transform.npy", T_camera_to_robot)
         
     finally:
