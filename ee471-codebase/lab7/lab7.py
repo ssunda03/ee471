@@ -55,9 +55,13 @@ def main():
         # Initialize the PID Controller
         threshold = 0.025 # ms
         controller = PIDController(dt = threshold)
-        
+        Kp = 0.7
+        controller.Kp = Kp * np.eye(3)  # Proportional gain
+        controller.Kd = (0.05 * Kp) * np.eye(3)  # Derivative gain
+        controller.Ki = (0.025 * Kp) * np.eye(3) # Integral gain
+
         # Constants
-        desired_offset = np.array([0, 0, 40])
+        desired_offset = np.array([0, 0, 15])
         TAG_SIZE = 40.0  # mm
         desired_tag = 2
         start_time = 0
@@ -73,7 +77,7 @@ def main():
             # 2. Detect AprilTags in the frame
             tags = detector.detect_tags(color_frame)
             if len(tags) == 0:
-                print("No tags detected.")
+                # print("No tags detected.")
                 robot.write_velocities([0, 0, 0, 0])
                 continue  # No tags detected; skip to next frame
 
@@ -127,6 +131,11 @@ def main():
                     jacobian = robot.get_jacobian(current_joint_readings)
                     translational_jacobian = jacobian[:3, :]  # Use the top 3x4 portion for translational motion
                     joint_velocities = np.dot(np.linalg.pinv(translational_jacobian), control_signal.T)
+
+                    # Limit velocities
+                    for i in range(len(joint_velocities)):
+                        if np.abs(joint_velocities[i]) > 180:
+                            joint_velocities[i] = 180
 
                     # Write joint velocities to the Robot!
                     robot.write_velocities(joint_velocities)
