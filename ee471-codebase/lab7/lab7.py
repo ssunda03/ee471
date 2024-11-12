@@ -53,8 +53,8 @@ def main():
         intrinsics = camera.get_intrinsics()
 
         # Initialize the PID Controller
-        threshold = 0.025 # ms
-        controller = PIDController(dt = threshold)
+        timestep = 0.025 # ms
+        controller = PIDController(dt = timestep)
         Kp = 0.7
         controller.Kp = Kp * np.eye(3)  # Proportional gain
         controller.Kd = (0.05 * Kp) * np.eye(3)  # Derivative gain
@@ -152,8 +152,8 @@ def main():
             
             # Calculate elapsed time for the loop and add a delay if needed
             elapsed_time = time.time() - start_time
-            if elapsed_time < threshold:
-                time.sleep(threshold - elapsed_time)
+            if elapsed_time < timestep:
+                time.sleep(timestep - elapsed_time)
 
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
