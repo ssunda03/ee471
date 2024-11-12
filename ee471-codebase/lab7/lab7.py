@@ -21,6 +21,14 @@ from Controller import PIDController
 from Realsense import Realsense
 from AprilTags import AprilTags
 
+def save_to_pickle(data, filename):
+    with open(filename, 'wb') as file:
+        pickle.dump(data,file)
+
+def load_from_pickle(filename):
+    with open(filename, 'rb') as file:
+        return pickle.load(file)
+
 def init_robot(robot, traj_init):
     robot.write_time(traj_init)  # Write trajectory time
     robot.write_motor_state(True)  # Write position mode
@@ -55,10 +63,10 @@ def main():
         # Initialize the PID Controller
         timestep = 0.025 # ms
         controller = PIDController(dt = timestep)
-        Kp = 0.7
-        controller.Kp = Kp * np.eye(3)  # Proportional gain
-        controller.Kd = (0.05 * Kp) * np.eye(3)  # Derivative gain
-        controller.Ki = (0.025 * Kp) * np.eye(3) # Integral gain
+        # Kp = 0.7
+        # controller.Kp = Kp * np.eye(3)  # Proportional gain
+        # controller.Kd = (0.05 * Kp) * np.eye(3)  # Derivative gain
+        # controller.Ki = (0.025 * Kp) * np.eye(3) # Integral gain
 
         # Constants
         desired_offset = np.array([0, 0, 15])
@@ -66,8 +74,16 @@ def main():
         desired_tag = 2
         start_time = 0
         tag_found = False
+
+        # Pre-allocate data for 10 seconds
+        data_time = np.zeros(400)
+        data_ee_poses = np.zeros((400, 3))
+        data_error = np.zeros((400, 3))
+        data_PID_out = np.zeros((400, 3))
+        data_q_vel = np.zeros((400, 4))
+        count = 0
         
-        while True:
+        while count < 400:
             # 1. Get camera frame
             color_frame, _ = camera.get_frames()
             if color_frame is None:
@@ -94,6 +110,7 @@ def main():
 
                 # 3.5 Start time
                 start_time = time.time()
+                data_time[count] = start_time
 
                 # Get pose of the tag in the camera frame
                 corners = tag.corners
@@ -117,14 +134,17 @@ def main():
                     # Get current End Effector position from FK
                     current_joint_readings = robot.get_joints_readings()[0]
                     current_robot_ee_pos = np.array(robot.get_ee_pos(current_joint_readings)[:3])
+                    data_ee_poses[count] = current_robot_ee_pos
 
                     # Get error
                     current_error = robot_frame_position - current_robot_ee_pos
+                    data_error[count] = current_error
                     # print("error: ")
                     # print(current_error)
 
                     # Compute control signal (cartesian velocities!)
                     control_signal = controller.compute_pid(current_error)
+                    data_PID_out[count] = control_signal
 
                     # Turn Cartesian velocities into joint velocities using inverse Jacobian
                     # via inverse velocity kinematics
@@ -136,6 +156,8 @@ def main():
                     for i in range(len(joint_velocities)):
                         if np.abs(joint_velocities[i]) > 180:
                             joint_velocities[i] = 180
+                   
+                    data_q_vel[count] = joint_velocities
 
                     # Write joint velocities to the Robot!
                     robot.write_velocities(joint_velocities)
@@ -155,12 +177,31 @@ def main():
             if elapsed_time < timestep:
                 time.sleep(timestep - elapsed_time)
 
+            count += 1
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
                 
     finally:
         camera.stop()
         cv2.destroyAllWindows()
+
+    # Trim unused space in data
+    data_time = data_time[:count]
+    data_ee_poses = data_ee_poses[:count, :]
+    data_error = data_error[:count]
+    data_PID_out = data_PID_out[:count]
+    data_q_vel = data_q_vel[:count, :]
+    
+    data = {
+        "time": data_time,
+        "ee_pos": data_ee_poses,
+        "error": data_error,
+        "PID_out": data_PID_out,
+        "q_vel": data_q_vel
+    }
+
+    save_to_pickle(data, "lab7_untunedPID.pkl")
+    # data = load_from_pickle("lab5_velocity_kinematics.pkl")
 
 if __name__ == "__main__":
     main()
