@@ -89,7 +89,10 @@ def calibrate_camera():
 
         # Step vi. Save transformation matrix, print transformation matrix
         print("Transformation Matrix (Camera to Robot):\n", T_camera_to_robot)
-        np.save("camera_robot_transform.npy", T_camera_to_robot)
+        # Save the processed image
+        script_dir = os.path.abspath(os.path.dirname(__file__))
+        transformation_matrix_path = os.path.join(script_dir, "camera_robot_transform.npy") 
+        np.save(transformation_matrix_path, T_camera_to_robot)
         
     finally:
         camera.stop()
@@ -98,6 +101,7 @@ def calibrate_camera():
 def main():
     # Calibrate the camera
     calibrate_camera()
+
 
 if __name__ == "__main__":
     main()
