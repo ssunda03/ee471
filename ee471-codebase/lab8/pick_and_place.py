@@ -173,7 +173,7 @@ def detect_colored_spheres_live(camera, workspace_mask=None):
 
         for circle in circles[0, :]:
             x, y, radius = circle
-            cv2.circle(color_frame, (x, y), radius, (0, 255, 0), 2)
+            # cv2.circle(color_frame, (x, y), radius, (0, 255, 0), 2)
 
             # # Create a mask for the circle
             # mask = np.zeros(hsv_image.shape[:2], dtype=np.uint8)
@@ -221,6 +221,11 @@ def detect_colored_spheres_live(camera, workspace_mask=None):
                     (255, 255, 255),
                     2,
                 )
+
+    # Save the processed image
+    script_dir = os.path.abspath(os.path.dirname(__file__))
+    output_image_path = os.path.join(script_dir, "detected_spheres.jpg") 
+    cv2.imwrite(output_image_path, color_frame)
 
     # Display the annotated frame
     cv2.imshow("Colored Sphere Detection", color_frame)
