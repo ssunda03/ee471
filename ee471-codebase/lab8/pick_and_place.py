@@ -1,6 +1,6 @@
 """
-Lab 6 Part 2: Camera-Robot Calibration
-Implements camera-robot calibration using AprilTags and the Kabsch algorithm
+Lab 8:  Vision-Guided Robotic Pick-and-Place Sorting System
+
 """
 
 import sys
@@ -14,6 +14,11 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../classes'))
 from Realsense import Realsense
 from AprilTags import AprilTags
 from point_registration import point_registration, rmse  # Import your existing point_registration function
+
+def adjust_gamma(image, gamma=1.0):
+    inv_gamma = 1.0 / gamma
+    table = np.array([((i / 255.0) ** inv_gamma) * 255 for i in np.arange(0, 256)]).astype("uint8")
+    return cv2.LUT(image, table)
 
 def calibrate_camera():
     try:
@@ -98,9 +103,156 @@ def calibrate_camera():
         camera.stop()
         cv2.destroyAllWindows()
 
+def detect_colored_spheres_live(camera, workspace_mask=None):
+    """
+    Detects and classifies colored spheres in the live feed from the RealSense camera.
+
+    Args:
+        camera (Realsense): RealSense camera object for live feed.
+        workspace_mask (np.ndarray, optional): Binary mask to ignore areas outside the robot's workspace.
+
+    Returns:
+        list: List of detected spheres with color, centroid coordinates, and radius.
+    """
+    # Define HSV color ranges for sphere detection
+    # color_ranges = {
+    #     "red_lower": [(0, 50, 50), (10, 255, 255)],
+    #     "red_upper": [(165, 50, 50), (180, 255, 255)],
+    #     "orange": [(10, 150, 150), (25, 255, 255)],
+    #     "yellow": [(25, 50, 50), (35, 255, 255)],
+    #     "blue": [(100, 50, 50), (130, 255, 255)],
+    # }
+
+    color_ranges = {
+        "red_lower": [(0, 100, 100), (5, 255, 255)],        # Lower range for red
+        "red_upper": [(170, 100, 100), (180, 255, 255)],    # Upper range for red
+        "orange": [(6, 150, 150), (24, 255, 255)],         # Refined range for orange
+        "yellow": [(25, 50, 50), (50, 255, 255)],         # Refined range for yellow
+        "blue": [(100, 50, 50), (130, 255, 255)],           # Standard range for blue
+    }
+
+    detected_spheres = []
+
+    # Get a frame from the RealSense camera
+    color_frame, _ = camera.get_frames()
+    if color_frame is None:
+        return detected_spheres  # No frame available
+
+    # Apply workspace mask if provided
+    if workspace_mask is not None:
+        color_frame = cv2.bitwise_and(color_frame, color_frame, mask=workspace_mask)
+
+    # Convert the frame to grayscale for circle detection
+    gray_frame = cv2.cvtColor(color_frame, cv2.COLOR_BGR2GRAY)
+
+    # Create CLAHE object
+    clahe = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(8, 8))
+
+    # Apply CLAHE to the grayscale image
+    clahe_image = clahe.apply(gray_frame)
+
+    # Apply Gaussian blur to reduce noise
+    blurred_frame = cv2.GaussianBlur(clahe_image, (7, 7), 2)
+
+    # Detect circles using HoughCircles
+    circles = cv2.HoughCircles(
+        blurred_frame,
+        cv2.HOUGH_GRADIENT,
+        dp=1.2,
+        minDist=10,  # Minimum distance between detected centers
+        param1=100,  # Canny edge detection threshold
+        param2=30,   # Accumulator threshold for circle detection
+        minRadius=5,  # Minimum circle radius
+        maxRadius=22,  # Maximum circle radius
+    )
+
+    if circles is not None:
+        circles = np.uint16(np.around(circles))
+        # Convert the frame to HSV color space for color detection
+        hsv_image = cv2.cvtColor(color_frame, cv2.COLOR_BGR2HSV)
+
+        for circle in circles[0, :]:
+            x, y, radius = circle
+            cv2.circle(color_frame, (x, y), radius, (0, 255, 0), 2)
+
+            # # Create a mask for the circle
+            # mask = np.zeros(hsv_image.shape[:2], dtype=np.uint8)
+            # cv2.circle(mask, (x, y), radius, 255, -1)  # Filled circle mask
+
+            # # Extract HSV values within the circle
+            # hsv_values = hsv_image[mask == 255]
+
+            # # Calculate the mean HSV values
+            # mean_hsv = cv2.mean(hsv_image, mask=mask)[:3]  # Exclude alpha channel
+
+            # # Print the HSV values
+            # print(f"Circle at (x={x}, y={y}, radius={radius}):")
+            # print(f"  Mean HSV: H={mean_hsv[0]:.2f}, S={mean_hsv[1]:.2f}, V={mean_hsv[2]:.2f}")
+
+            # Check the color of the circle
+            detected_color = None
+            for color, (lower, upper) in color_ranges.items():
+                lower_bound = np.array(lower, dtype=np.uint8)
+                upper_bound = np.array(upper, dtype=np.uint8)
+                mask = cv2.inRange(hsv_image, lower_bound, upper_bound)
+
+                # Focus the mask on the detected circle region
+                circle_mask = np.zeros_like(mask)
+                cv2.circle(circle_mask, (x, y), radius, 255, -1)
+                masked_region = cv2.bitwise_and(mask, mask, mask=circle_mask)
+
+                # Check if the circle region contains sufficient color pixels
+                if cv2.countNonZero(masked_region) > 0.5 * np.pi * (radius ** 2):  # At least 60% match
+                    detected_color = "red" if color in ["red_lower", "red_upper"] else color
+                    break
+
+            if detected_color:
+                detected_spheres.append((detected_color, (int(x), int(y)), int(radius)))
+
+                # Annotate the detected circles on the frame
+                cv2.circle(color_frame, (x, y), radius, (0, 255, 0), 2)
+                cv2.circle(color_frame, (x, y), 2, (0, 0, 255), 3)
+                cv2.putText(
+                    color_frame,
+                    detected_color,
+                    (x - 20, y - 20),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    (255, 255, 255),
+                    2,
+                )
+
+    # Display the annotated frame
+    cv2.imshow("Colored Sphere Detection", color_frame)
+
+    return detected_spheres
+
 def main():
-    # Calibrate the camera
-    calibrate_camera()
+    try:
+        # Camera calibration
+        calibrate_camera()
+
+        # Initialize RealSense camera
+        camera = Realsense()
+
+        # Define workspace mask (optional)
+        workspace_mask = None  # Replace with actual mask if needed
+
+        while True:
+            # Detect spheres in live feed
+            spheres = detect_colored_spheres_live(camera, workspace_mask)
+
+            # Print detected spheres to the terminal
+            for color, (x, y), radius in spheres:
+                print(f"Detected {color} sphere at ({x}, {y}) with radius {radius}")
+
+            # Exit on 'q' key press
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+
+    finally:
+        camera.stop()
+        cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
