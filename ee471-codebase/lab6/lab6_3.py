@@ -31,7 +31,7 @@ def main():
         TAG_SIZE = 40.0  # mm
         PRINT_INTERVAL = 10  # frames
         counter = 0
-        desired_tag = 2
+        desired_tag = 5
         
         while True:
             # 1. Get camera frame

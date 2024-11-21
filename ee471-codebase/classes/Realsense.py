@@ -121,7 +121,7 @@ class Realsense:
             depth_image = np.asanyarray(depth_frame.get_data())
             color_image = np.asanyarray(color_frame.get_data())
             
-            return color_image, depth_image
+            return color_image, depth_frame
             
         except Exception as e:
             print(f"Error capturing frames: {str(e)}")

@@ -7,6 +7,8 @@ import sys
 import os
 import numpy as np
 import cv2
+import pyrealsense2 as rs
+
 
 # Add the 'classes' directory to the PYTHONPATH
 sys.path.append(os.path.join(os.path.dirname(__file__), '../classes'))
@@ -97,6 +99,7 @@ def calibrate_camera():
         # Save the processed image
         script_dir = os.path.abspath(os.path.dirname(__file__))
         transformation_matrix_path = os.path.join(script_dir, "camera_robot_transform.npy") 
+        print(f"Saving to: {transformation_matrix_path}")
         np.save(transformation_matrix_path, T_camera_to_robot)
         
     finally:
@@ -115,14 +118,6 @@ def detect_colored_spheres_live(camera, workspace_mask=None):
         list: List of detected spheres with color, centroid coordinates, and radius.
     """
     # Define HSV color ranges for sphere detection
-    # color_ranges = {
-    #     "red_lower": [(0, 50, 50), (10, 255, 255)],
-    #     "red_upper": [(165, 50, 50), (180, 255, 255)],
-    #     "orange": [(10, 150, 150), (25, 255, 255)],
-    #     "yellow": [(25, 50, 50), (35, 255, 255)],
-    #     "blue": [(100, 50, 50), (130, 255, 255)],
-    # }
-
     color_ranges = {
         "red_lower": [(0, 100, 100), (5, 255, 255)],        # Lower range for red
         "red_upper": [(170, 100, 100), (180, 255, 255)],    # Upper range for red
@@ -134,8 +129,8 @@ def detect_colored_spheres_live(camera, workspace_mask=None):
     detected_spheres = []
 
     # Get a frame from the RealSense camera
-    color_frame, _ = camera.get_frames()
-    if color_frame is None:
+    color_frame, depth_frame = camera.get_frames()
+    if color_frame is None or  depth_frame is None:
         return detected_spheres  # No frame available
 
     # Apply workspace mask if provided
@@ -173,6 +168,7 @@ def detect_colored_spheres_live(camera, workspace_mask=None):
 
         for circle in circles[0, :]:
             x, y, radius = circle
+
             # cv2.circle(color_frame, (x, y), radius, (0, 255, 0), 2)
 
             # # Create a mask for the circle
@@ -230,12 +226,71 @@ def detect_colored_spheres_live(camera, workspace_mask=None):
     # Display the annotated frame
     cv2.imshow("Colored Sphere Detection", color_frame)
 
-    return detected_spheres
+    return detected_spheres, depth_frame
+
+def get_sphere_coordinates(spheres, camera, transformation_matrix, depth_frame):
+    """
+    Converts 2D sphere centroids to 3D robot coordinates using depth information.
+
+    Args:
+        spheres (list): List of detected spheres with color, centroid coordinates, and radius.
+                        Format: [(color, (cx, cy), radius), ...]
+        camera (Realsense): RealSense camera object for accessing intrinsics.
+        transformation_matrix (np.ndarray): Transformation matrix from camera to robot frame.
+        depth_frame: RealSense depth frame object for depth information.
+
+    Returns:
+        list: List of spheres with 3D robot coordinates.
+              Format: [(color, (x, y, z)), ...]
+    """
+    sphere_coordinates = []
+
+    # Get depth intrinsics for deprojection
+    depth_intrinsics = camera.get_depth_intrinsics()
+
+    for color, (cx, cy), radius in spheres:
+        # Get the depth value at the sphere's centroid
+        depth = depth_frame.get_distance(cx, cy)
+
+        if depth == 0:  # Skip invalid depth readings
+            print(f"Invalid depth for {color} sphere at ({cx}, {cy}). Skipping.")
+            continue
+
+        # Convert 2D pixel (cx, cy) and depth to 3D coordinates in the camera frame
+        camera_coords = rs.rs2_deproject_pixel_to_point(depth_intrinsics, [cx, cy], depth)
+
+        # Convert camera frame coordinates to robot frame coordinates
+        camera_coords_homogeneous = np.array([1000 * camera_coords[0], 1000 * camera_coords[1], 1000 * camera_coords[2], 1])
+        robot_coords_homogeneous = np.dot(transformation_matrix, camera_coords_homogeneous)
+        robot_coords = robot_coords_homogeneous[:3]  # Extract 3D coordinates
+
+        print("Camera Coordinates (Homogeneous):", camera_coords_homogeneous)
+        # print("Robot Coordinates (Homogeneous):", robot_coords_homogeneous)
+        print("Robot Coordinates (Cartesian):", robot_coords)
+
+        # Tag ID: 5
+        # Position in Camera Frame (mm): [ -1.15863301  82.59690072 562.16642814]
+        # Position in Robot Frame (mm): [121.55167254 -30.16229282  -3.59678858]
+
+        # Apply a geometric correction for the sphere's center (optional)
+        # Adjust z-coordinate for radius (viewpoint offset correction)
+        robot_coords[2] -= radius
+
+        # Append the sphere's color and its computed robot coordinates
+        sphere_coordinates.append((color, tuple(robot_coords)))
+
+    return sphere_coordinates
 
 def main():
     try:
         # Camera calibration
         calibrate_camera()
+
+        # Load the calibration matrix
+        script_dir = os.path.abspath(os.path.dirname(__file__))
+        transformation_matrix_path = os.path.join(script_dir, "camera_robot_transform.npy")
+        print(f"Loading from: {transformation_matrix_path}")
+        transformation_matrix = np.load(transformation_matrix_path)
 
         # Initialize RealSense camera
         camera = Realsense()
@@ -245,7 +300,16 @@ def main():
 
         while True:
             # Detect spheres in live feed
-            spheres = detect_colored_spheres_live(camera, workspace_mask)
+            spheres, depth_frame = detect_colored_spheres_live(camera, workspace_mask)
+
+            # Get 3d coordinates
+            robot_sphere_coordinates = get_sphere_coordinates(spheres, camera, transformation_matrix, depth_frame)
+
+            # Log the 3D coordinates
+            for color, coords in robot_sphere_coordinates:
+                print(f"{color} sphere at robot coordinates: {coords}")
+
+            # PICK AND PLACE LOGIC HERE
 
             # Print detected spheres to the terminal
             for color, (x, y), radius in spheres:
