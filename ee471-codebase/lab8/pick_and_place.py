@@ -14,6 +14,8 @@ import pyrealsense2 as rs
 # Add the 'classes' directory to the PYTHONPATH
 sys.path.append(os.path.join(os.path.dirname(__file__), '../classes'))
 
+from Robot import Robot
+from Controller import PIDController
 from Realsense import Realsense
 from AprilTags import AprilTags
 from point_registration import point_registration, rmse  # Import your existing point_registration function
@@ -22,6 +24,15 @@ def adjust_gamma(image, gamma=1.0):
     inv_gamma = 1.0 / gamma
     table = np.array([((i / 255.0) ** inv_gamma) * 255 for i in np.arange(0, 256)]).astype("uint8")
     return cv2.LUT(image, table)
+
+def init_robot(robot, traj_init):
+    robot.write_time(traj_init)  # Write trajectory time
+    robot.write_motor_state(True)  # Write position mode
+
+    # Program
+    joints = [0, 0, 0, 0] # Home position
+    robot.write_joints(joints)  # Write joints to first setpoint
+    time.sleep(traj_init)  # Wait for trajectory completion
 
 def calibrate_camera():
     try:
@@ -289,10 +300,113 @@ def get_sphere_coordinates(spheres, camera, transformation_matrix, depth_frame):
 
     return sphere_coordinates
 
+def move_to_position(robot, controller, target_pos, timestep):
+    """
+    Move the robot end-effector to the target position using PID control.
+
+    Args:
+        robot (Robot): Instance of the Robot class.
+        controller (PIDController): PID controller for position control.
+        target_pos (np.ndarray): Target 3D position in the robot frame.
+        timestep (float): Control loop timestep (in seconds).
+    """
+    while True:
+        # Get current end-effector position
+        current_joint_readings = robot.get_joints_readings()[0]
+        current_ee_pos = np.array(robot.get_ee_pos(current_joint_readings)[:3])
+
+        # Compute error
+        error = target_pos - current_ee_pos
+        print(f"error: {error}")
+
+        # Break if error is small enough
+        if np.linalg.norm(error) < 6.0:  # 6 mm tolerance
+            break
+
+        # Compute PID control signal
+        control_signal = controller.compute_pid(error)
+
+        # Convert Cartesian velocities to joint velocities
+        jacobian = robot.get_jacobian(current_joint_readings)
+        translational_jacobian = jacobian[:3, :]  # Use top 3x4 for translational motion
+        joint_velocities = np.dot(np.linalg.pinv(translational_jacobian), control_signal.T)
+
+        # Limit velocities
+        joint_velocities = np.clip(joint_velocities, -180, 180)
+
+        # Write velocities to the robot
+        robot.write_velocities(joint_velocities)
+
+        # Wait for the next control loop
+        time.sleep(timestep)
+
+
+def pick_and_place(robot, controller, sphere_coords, drop_off_loc, home, timestep=0.05):
+    """
+    Perform pick-and-place operation for a detected sphere.
+
+    Args:
+        robot (Robot): Instance of the Robot class.
+        controller (PIDController): PID controller for position control.
+        sphere_coords (np.ndarray): 3D coordinates of the sphere in the robot frame.
+        drop_off_loc (np.ndarray): 3D coordinates of the drop-off location in the robot frame.
+        home (np.ndarray): 3D coordinates of the home position in the robot frame.
+        timestep (float): Control loop timestep (in seconds).
+    """
+    # Tuning parameters
+    approach_offset = 20  # mm above the sphere
+    z_lift_height = 100   # mm lift height for placing
+
+    # 1. Approach the sphere
+    print("before first approach")
+    approach_position = sphere_coords + np.array([0, 0, approach_offset])
+    move_to_position(robot, controller, approach_position, timestep)
+
+    # 2. Open and lower to pick the sphere
+    robot.write_gripper(True)
+    time.sleep(1)  # Allow time for the gripper to open
+    move_to_position(robot, controller, sphere_coords, timestep)
+
+    # Close gripper to pick the sphere (simulate gripper action here)
+    robot.write_gripper(False)
+    time.sleep(1)  # Allow time for the gripper to close
+
+    # 3. Lift the sphere
+    lift_position = sphere_coords + np.array([0, 0, z_lift_height])
+    move_to_position(robot, controller, lift_position, timestep)
+
+    # 4. Move to drop-off location
+    drop_position = drop_off_loc + np.array([0, 0, z_lift_height])
+    move_to_position(robot, controller, drop_position, timestep)
+
+    # Lower to place the sphere
+    move_to_position(robot, controller, drop_off_loc, timestep)
+
+    # Open gripper to release the sphere
+    robot.write_gripper(True)
+    time.sleep(1)  # Allow time for the gripper to open
+
+    # 5. Return to home position
+    move_to_position(robot, controller, home, timestep)
+
+
 def main():
+    # STATIC PLACE TO MOVE BALL
+    # Position in Robot Frame (mm): [  95.33310498 -201.37709481  -17.20353483]
+    drop_off_loc = np.array([95.33310498, -201.37709481, -17.20353483])
+    home = np.array([0, 220, 200])
+
     try:
         # Camera calibration
         calibrate_camera()
+
+        # Initialize Robot instance
+        robot = Robot()
+        traj_init = 3  # Trajectory initialization time
+        init_robot(robot, traj_init)
+
+        # Set robot to velocity control mode
+        robot.write_mode("velocity")
 
         # Load the calibration matrix
         script_dir = os.path.abspath(os.path.dirname(__file__))
@@ -306,24 +420,35 @@ def main():
         # Define workspace mask (optional)
         workspace_mask = None  # Replace with actual mask if needed
 
+        # Initialize PID Controller
+        timestep = 0.05  # Control loop timestep in seconds
+        controller = PIDController(dt=timestep)
+
+        # Tuning PID Gains
+        Kp = 0.7
+        controller.Kp = Kp * np.eye(3)  # Proportional gain
+        controller.Kd = (0.05 * Kp) * np.eye(3)  # Derivative gain
+        controller.Ki = (0.025 * Kp) * np.eye(3)  # Integral gain
+
+        # Frame disregard logic
+        num_frames_to_disregard = 10
+
         while True:
             # Detect spheres in live feed
-            spheres, depth_frame = detect_colored_spheres_live(camera, workspace_mask)
+            for i in range(num_frames_to_disregard):
+                spheres, depth_frame = detect_colored_spheres_live(camera, workspace_mask)
 
             # Get 3d coordinates
             robot_sphere_coordinates = get_sphere_coordinates(spheres, camera, transformation_matrix, depth_frame)
 
-            # # Log the 3D coordinates
-            # for color, coords in robot_sphere_coordinates:
-            #     print(f"{color} sphere at robot coordinates: {coords}")
+            # Pick and place each color detected
+            for color, coords in robot_sphere_coordinates:
+                print("before pnP")
+                pick_and_place(robot, controller, np.array(coords), drop_off_loc, home, timestep)
+                print("after pnP")
 
-            # PICK AND PLACE LOGIC HERE
 
-            # # Print detected spheres to the terminal
-            # for color, (x, y), radius in spheres:
-            #     print(f"Detected {color} sphere at ({x}, {y}) with radius {radius}")
-
-            time.sleep(.5)
+            # time.sleep(.25)
             # Exit on 'q' key press
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
