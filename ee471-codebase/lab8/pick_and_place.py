@@ -5,6 +5,7 @@ Lab 8:  Vision-Guided Robotic Pick-and-Place Sorting System
 
 import sys
 import os
+import time
 import numpy as np
 import cv2
 import pyrealsense2 as rs
@@ -158,7 +159,7 @@ def detect_colored_spheres_live(camera, workspace_mask=None):
         param1=100,  # Canny edge detection threshold
         param2=30,   # Accumulator threshold for circle detection
         minRadius=5,  # Minimum circle radius
-        maxRadius=22,  # Maximum circle radius
+        maxRadius=25,  # Maximum circle radius
     )
 
     if circles is not None:
@@ -256,25 +257,32 @@ def get_sphere_coordinates(spheres, camera, transformation_matrix, depth_frame):
             print(f"Invalid depth for {color} sphere at ({cx}, {cy}). Skipping.")
             continue
 
-        # Convert 2D pixel (cx, cy) and depth to 3D coordinates in the camera frame
+        # Convert 2D pixel (cx, cy) and depth to 3D coordinates in the camera frame (Psurface)
         camera_coords = rs.rs2_deproject_pixel_to_point(depth_intrinsics, [cx, cy], depth)
+        print("Camera Frame Coordinates:", np.array(camera_coords) * 1000)
+        print("Depth from get_distance:", np.array([depth]) * 1000)
+
+        # Turn surface point into center point
+        mm_camera_coords = np.array([1000 * camera_coords[0], 1000 * camera_coords[1], 1000 * camera_coords[2]])
+        sphere_radius_mm = 15
+        direction_vector = mm_camera_coords / np.linalg.norm(mm_camera_coords)
+        mm_center_coords = mm_camera_coords - sphere_radius_mm * direction_vector
 
         # Convert camera frame coordinates to robot frame coordinates
-        camera_coords_homogeneous = np.array([1000 * camera_coords[0], 1000 * camera_coords[1], 1000 * camera_coords[2], 1])
-        robot_coords_homogeneous = np.dot(transformation_matrix, camera_coords_homogeneous)
+        mm_center_coords_homogenous = np.array([mm_center_coords[0], mm_center_coords[1], mm_center_coords[2], 1])
+        robot_coords_homogeneous = np.dot(transformation_matrix, mm_center_coords_homogenous)
         robot_coords = robot_coords_homogeneous[:3]  # Extract 3D coordinates
 
-        print("Camera Coordinates (Homogeneous):", camera_coords_homogeneous)
+        print("Camera Coordinates:", mm_center_coords)
         # print("Robot Coordinates (Homogeneous):", robot_coords_homogeneous)
-        print("Robot Coordinates (Cartesian):", robot_coords)
+        print("Robot Coordinates:", robot_coords)
+        print('\n')
 
         # Tag ID: 5
-        # Position in Camera Frame (mm): [ -1.15863301  82.59690072 562.16642814]
-        # Position in Robot Frame (mm): [121.55167254 -30.16229282  -3.59678858]
+        # Position in Camera Frame (mm): [ 26.21222871  64.79645751 704.43064046]
+        # Position in Robot Frame (mm): [126.20035687 -29.77859978  -1.63430138]
 
-        # Apply a geometric correction for the sphere's center (optional)
-        # Adjust z-coordinate for radius (viewpoint offset correction)
-        robot_coords[2] -= radius
+
 
         # Append the sphere's color and its computed robot coordinates
         sphere_coordinates.append((color, tuple(robot_coords)))
@@ -305,16 +313,17 @@ def main():
             # Get 3d coordinates
             robot_sphere_coordinates = get_sphere_coordinates(spheres, camera, transformation_matrix, depth_frame)
 
-            # Log the 3D coordinates
-            for color, coords in robot_sphere_coordinates:
-                print(f"{color} sphere at robot coordinates: {coords}")
+            # # Log the 3D coordinates
+            # for color, coords in robot_sphere_coordinates:
+            #     print(f"{color} sphere at robot coordinates: {coords}")
 
             # PICK AND PLACE LOGIC HERE
 
-            # Print detected spheres to the terminal
-            for color, (x, y), radius in spheres:
-                print(f"Detected {color} sphere at ({x}, {y}) with radius {radius}")
+            # # Print detected spheres to the terminal
+            # for color, (x, y), radius in spheres:
+            #     print(f"Detected {color} sphere at ({x}, {y}) with radius {radius}")
 
+            time.sleep(.5)
             # Exit on 'q' key press
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
