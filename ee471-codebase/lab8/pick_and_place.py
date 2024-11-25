@@ -240,14 +240,14 @@ def detect_colored_spheres_live(camera, workspace_mask=None):
 
     return detected_spheres, depth_frame
 
-def get_sphere_coordinates(spheres, camera, transformation_matrix, depth_frame):
+def get_sphere_coordinates_depth(spheres, depth_intrinsics, transformation_matrix, depth_frame):
     """
     Converts 2D sphere centroids to 3D robot coordinates using depth information.
 
     Args:
         spheres (list): List of detected spheres with color, centroid coordinates, and radius.
                         Format: [(color, (cx, cy), radius), ...]
-        camera (Realsense): RealSense camera object for accessing intrinsics.
+        depth_intrinsics: RealSense camera depth intrinsics.
         transformation_matrix (np.ndarray): Transformation matrix from camera to robot frame.
         depth_frame: RealSense depth frame object for depth information.
 
@@ -256,9 +256,6 @@ def get_sphere_coordinates(spheres, camera, transformation_matrix, depth_frame):
               Format: [(color, (x, y, z)), ...]
     """
     sphere_coordinates = []
-
-    # Get depth intrinsics for deprojection
-    depth_intrinsics = camera.get_depth_intrinsics()
 
     for color, (cx, cy), radius in spheres:
         # Get the depth value at the sphere's centroid
@@ -299,6 +296,106 @@ def get_sphere_coordinates(spheres, camera, transformation_matrix, depth_frame):
         sphere_coordinates.append((color, tuple(robot_coords)))
 
     return sphere_coordinates
+
+def get_sphere_pose(xyr, intrinsics, radius_size, camera_robot_transform):
+    """
+    Estimate the 3D pose of a sphere using the PnP algorithm, and transform to the robot frame.
+    
+    Args:
+        xyr (tuple): Sphere center coordinates (cx, cy) and radius in image frame.
+        intrinsics: Camera intrinsic parameters (from RealSense).
+        radius_size (float): Physical size of the sphere radius in millimeters.
+        camera_robot_transform (np.ndarray): Transformation matrix from camera to robot frame.
+    
+    Returns:
+        tuple: (robot_coords, rotation_matrix)
+            - robot_coords: 3D position of the sphere in the robot frame.
+            - rotation_matrix: 3x3 rotation matrix from object to camera frame.
+    """
+    try:
+        # Extract sphere center and radius
+        cx, cy, r = xyr
+
+        # 3D model points in the object frame (relative to the sphere center)
+        object_points = np.array([
+            [0, 0, 0],  # Sphere center
+            [radius_size, 0, 0],  # Right
+            [-radius_size, 0, 0],  # Left
+            [0, radius_size, 0],  # Top
+            [0, -radius_size, 0],  # Bottom
+        ])
+        
+        # Corresponding 2D image points
+        image_points = np.array([
+            [cx, cy],  # Sphere center
+            [cx + r, cy],  # Right
+            [cx - r, cy],  # Left
+            [cx, cy + r],  # Top
+            [cx, cy - r],  # Bottom
+        ])
+        
+        # Camera matrix from intrinsics
+        camera_matrix = np.array([
+            [intrinsics.fx, 0, intrinsics.ppx],
+            [0, intrinsics.fy, intrinsics.ppy],
+            [0, 0, 1]
+        ])
+        
+        # SolvePnP to estimate pose
+        success, rvec, tvec = cv2.solvePnP(object_points, image_points, camera_matrix, None)
+        if not success:
+            raise ValueError("PnP solution failed.")
+
+        # Convert rotation vector to rotation matrix
+        rot_matrix, _ = cv2.Rodrigues(rvec)
+
+        # Construct 4x4 transformation matrix for the sphere in the camera frame
+        sphere_to_camera_transform = np.eye(4)
+        sphere_to_camera_transform[:3, :3] = rot_matrix
+        sphere_to_camera_transform[:3, 3] = tvec.flatten()
+
+        # Transform the sphere's position to the robot frame
+        sphere_to_robot_transform = camera_robot_transform @ sphere_to_camera_transform
+        robot_coords = sphere_to_robot_transform[:3, 3]
+
+        return robot_coords, rot_matrix
+    except Exception as e:
+        print(f"Error in get_sphere_pose: {str(e)}")
+        return None, None
+
+
+def get_sphere_coordinates_PnP(spheres, intrinsics, transformation_matrix):
+    """
+    Converts 2D sphere centroids to 3D robot coordinates using PnP for pose estimation.
+
+    Args:
+        spheres (list): List of detected spheres with color, centroid coordinates, and radius.
+                        Format: [(color, (cx, cy), radius), ...]
+        intrinsics: RealSense camera intrinsics.
+        transformation_matrix (np.ndarray): Transformation matrix from camera to robot frame.
+
+    Returns:
+        list: List of spheres with 3D robot coordinates.
+              Format: [(color, (x, y, z)), ...]
+    """
+    sphere_coordinates = []
+
+    # Get camera intrinsics
+    # intrinsics = camera.get_intrinsics()
+
+    for color, (cx, cy), radius in spheres:
+        # Use the PnP algorithm to estimate the sphere's pose
+        try:
+            robot_coords, _ = get_sphere_pose((cx, cy, radius), intrinsics, 15, transformation_matrix)
+            if robot_coords is not None:
+                sphere_coordinates.append((color, tuple(robot_coords)))
+            else:
+                print(f"Failed to estimate pose for {color} sphere at ({cx}, {cy}). Skipping.")
+        except Exception as e:
+            print(f"Error processing {color} sphere at ({cx}, {cy}): {e}")
+
+    return sphere_coordinates
+
 
 def move_to_position(robot, controller, target_pos, timestep):
     """
@@ -358,7 +455,7 @@ def pick_and_place(robot, controller, sphere_coords, drop_off_loc, home, timeste
     z_lift_height = 100   # mm lift height for placing
 
     # 1. Approach the sphere
-    print("before first approach")
+    # print("before first approach")
     approach_position = sphere_coords + np.array([0, 0, approach_offset])
     move_to_position(robot, controller, approach_position, timestep)
 
@@ -416,6 +513,8 @@ def main():
 
         # Initialize RealSense camera
         camera = Realsense()
+        camera_intrinsics = camera.get_intrinsics()
+        camera_depth_intrinsics = camera.get_depth_intrinsics()
 
         # Define workspace mask (optional)
         workspace_mask = None  # Replace with actual mask if needed
@@ -438,17 +537,17 @@ def main():
             for i in range(num_frames_to_disregard):
                 spheres, depth_frame = detect_colored_spheres_live(camera, workspace_mask)
 
-            # Get 3d coordinates
-            robot_sphere_coordinates = get_sphere_coordinates(spheres, camera, transformation_matrix, depth_frame)
+            # # Pick and place each color detected (DEPTH)
+            # robot_sphere_coordinates_depth = get_sphere_coordinates_depth(spheres, camera_depth_intrinsics, transformation_matrix, depth_frame)
+            # for color, coords in robot_sphere_coordinates_depth:
+            #     pick_and_place(robot, controller, np.array(coords), drop_off_loc, home, timestep)
 
-            # Pick and place each color detected
-            for color, coords in robot_sphere_coordinates:
-                print("before pnP")
+            # Pick and place each color detected (PnP)
+            robot_sphere_coordinates_PnP = get_sphere_coordinates_PnP(spheres, camera_intrinsics, transformation_matrix)
+            for color, coords in robot_sphere_coordinates_PnP:
                 pick_and_place(robot, controller, np.array(coords), drop_off_loc, home, timestep)
-                print("after pnP")
 
 
-            # time.sleep(.25)
             # Exit on 'q' key press
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
