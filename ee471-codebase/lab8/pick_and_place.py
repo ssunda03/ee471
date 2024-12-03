@@ -9,7 +9,7 @@ import time
 import numpy as np
 import cv2
 import pyrealsense2 as rs
-
+from collections import defaultdict
 
 # Add the 'classes' directory to the PYTHONPATH
 sys.path.append(os.path.join(os.path.dirname(__file__), '../classes'))
@@ -25,13 +25,19 @@ def adjust_gamma(image, gamma=1.0):
     table = np.array([((i / 255.0) ** inv_gamma) * 255 for i in np.arange(0, 256)]).astype("uint8")
     return cv2.LUT(image, table)
 
-def init_robot(robot, traj_init):
+def init_robot(robot, traj_init, pos):
     robot.write_time(traj_init)  # Write trajectory time
     robot.write_motor_state(True)  # Write position mode
 
     # Program
-    joints = [0, 0, 0, 0] # Home position
+    #code for IK here
+    joints = robot.get_ik(pos)
+    print(joints)
+
+    # joints = [0, 0, 0, 0] # Home position
+
     robot.write_joints(joints)  # Write joints to first setpoint
+
     time.sleep(traj_init)  # Wait for trajectory completion
 
 def calibrate_camera():
@@ -170,7 +176,7 @@ def detect_colored_spheres_live(camera, workspace_mask=None):
         param1=100,  # Canny edge detection threshold
         param2=30,   # Accumulator threshold for circle detection
         minRadius=5,  # Minimum circle radius
-        maxRadius=25,  # Maximum circle radius
+        maxRadius=20,  # Maximum circle radius
     )
 
     if circles is not None:
@@ -267,8 +273,8 @@ def get_sphere_coordinates_depth(spheres, depth_intrinsics, transformation_matri
 
         # Convert 2D pixel (cx, cy) and depth to 3D coordinates in the camera frame (Psurface)
         camera_coords = rs.rs2_deproject_pixel_to_point(depth_intrinsics, [cx, cy], depth)
-        print("Camera Frame Coordinates:", np.array(camera_coords) * 1000)
-        print("Depth from get_distance:", np.array([depth]) * 1000)
+        # print("Camera Frame Coordinates:", np.array(camera_coords) * 1000)
+        # print("Depth from get_distance:", np.array([depth]) * 1000)
 
         # Turn surface point into center point
         mm_camera_coords = np.array([1000 * camera_coords[0], 1000 * camera_coords[1], 1000 * camera_coords[2]])
@@ -281,10 +287,10 @@ def get_sphere_coordinates_depth(spheres, depth_intrinsics, transformation_matri
         robot_coords_homogeneous = np.dot(transformation_matrix, mm_center_coords_homogenous)
         robot_coords = robot_coords_homogeneous[:3]  # Extract 3D coordinates
 
-        print("Camera Coordinates:", mm_center_coords)
+        # print("Camera Coordinates:", mm_center_coords)
         # print("Robot Coordinates (Homogeneous):", robot_coords_homogeneous)
-        print("Robot Coordinates:", robot_coords)
-        print('\n')
+        # print("Robot Coordinates:", robot_coords)
+        # print('\n')
 
         # Tag ID: 5
         # Position in Camera Frame (mm): [ 26.21222871  64.79645751 704.43064046]
@@ -323,7 +329,7 @@ def get_sphere_pose(xyr, intrinsics, radius_size, camera_robot_transform):
             [-radius_size, 0, 0],  # Left
             [0, radius_size, 0],  # Top
             [0, -radius_size, 0],  # Bottom
-        ])
+        ], dtype=np.float32)
         
         # Corresponding 2D image points
         image_points = np.array([
@@ -332,14 +338,14 @@ def get_sphere_pose(xyr, intrinsics, radius_size, camera_robot_transform):
             [cx - r, cy],  # Left
             [cx, cy + r],  # Top
             [cx, cy - r],  # Bottom
-        ])
+        ], dtype=np.float32)
         
         # Camera matrix from intrinsics
         camera_matrix = np.array([
             [intrinsics.fx, 0, intrinsics.ppx],
             [0, intrinsics.fy, intrinsics.ppy],
             [0, 0, 1]
-        ])
+        ], dtype=np.float32)
         
         # SolvePnP to estimate pose
         success, rvec, tvec = cv2.solvePnP(object_points, image_points, camera_matrix, None)
@@ -414,10 +420,11 @@ def move_to_position(robot, controller, target_pos, timestep):
 
         # Compute error
         error = target_pos - current_ee_pos
-        print(f"error: {error}")
+        print(f"error: {np.linalg.norm(error)}")
 
         # Break if error is small enough
-        if np.linalg.norm(error) < 6.0:  # 6 mm tolerance
+        if np.linalg.norm(error) < 16.0:
+            robot.write_velocities(np.array([0, 0, 0, 0]))
             break
 
         # Compute PID control signal
@@ -438,7 +445,7 @@ def move_to_position(robot, controller, target_pos, timestep):
         time.sleep(timestep)
 
 
-def pick_and_place(robot, controller, sphere_coords, drop_off_loc, home, timestep=0.05):
+def pick_and_place(robot, controller, sphere_coords, drop_off_loc, timestep=0.05):
     """
     Perform pick-and-place operation for a detected sphere.
 
@@ -451,8 +458,8 @@ def pick_and_place(robot, controller, sphere_coords, drop_off_loc, home, timeste
         timestep (float): Control loop timestep (in seconds).
     """
     # Tuning parameters
-    approach_offset = 20  # mm above the sphere
-    z_lift_height = 100   # mm lift height for placing
+    approach_offset = 50  # mm above the sphere
+    z_lift_height = 150   # mm lift height for placing
 
     # 1. Approach the sphere
     # print("before first approach")
@@ -483,24 +490,95 @@ def pick_and_place(robot, controller, sphere_coords, drop_off_loc, home, timeste
     robot.write_gripper(True)
     time.sleep(1)  # Allow time for the gripper to open
 
-    # 5. Return to home position
-    move_to_position(robot, controller, home, timestep)
+    # # 5. Return to home position
+    # move_to_position(robot, controller, home, timestep)
 
+def average_spheres_over_frames(camera, workspace_mask, num_frames):
+    """
+    Detect and average spheres over multiple frames, removing outliers.
+
+    Args:
+        camera (Realsense): RealSense camera object.
+        workspace_mask (np.ndarray): Workspace mask to filter detections (optional).
+        num_frames (int): Number of frames to average over.
+
+    Returns:
+        list: Averaged list of spheres in the format [(color, (avg_cx, avg_cy), avg_radius), ...].
+    """
+
+    print("IN AVG SPHERE METHOD")
+    # Dictionary to store detections by color
+    spheres_by_color = defaultdict(list)
+
+    # Collect sphere detections across frames
+    for _ in range(num_frames):
+        # print("loop for sphere detections")
+        spheres, _ = detect_colored_spheres_live(camera, workspace_mask)
+        for color, (cx, cy), radius in spheres:
+            spheres_by_color[color].append((cx, cy, radius))
+
+    # Compute averages after removing outliers
+    averaged_spheres = []
+    for color, detections in spheres_by_color.items():
+        detections_array = np.array(detections)  # Convert to numpy array for easier processing
+
+        if len(detections_array) < 2:
+            print(f"Not enough detections for {color} to average. Returning original.")
+            return spheres
+
+        # Separate detections into x, y, and radius
+        cx_values = detections_array[:, 0]
+        cy_values = detections_array[:, 1]
+        radius_values = detections_array[:, 2]
+
+        # Remove min and max for each dimension independently
+        filtered_cx = np.delete(cx_values, [np.argmin(cx_values), np.argmax(cx_values)])
+        filtered_cy = np.delete(cy_values, [np.argmin(cy_values), np.argmax(cy_values)])
+        filtered_radius = np.delete(radius_values, [np.argmin(radius_values), np.argmax(radius_values)])
+
+        # Check if there are remaining values after filtering
+        if len(filtered_cx) == 0 or len(filtered_cy) == 0 or len(filtered_radius) == 0:
+            print(f"Filtered out all detections for {color}. Skipping.")
+            continue
+
+        # Compute the mean of the remaining values
+        avg_cx = np.mean(filtered_cx)
+        avg_cy = np.mean(filtered_cy)
+        avg_radius = np.mean(filtered_radius)
+
+        averaged_spheres.append((color, (avg_cx, avg_cy), avg_radius))
+
+    print("LEAVING AVG SPHERE METHOD")
+    return averaged_spheres
+
+def check_workspace(coords):
+    # hardcode workspace in robot frame
+    x = coords[0]
+    y = coords[1]
+    z = coords[2]
+
+    if ((-125 < y < 125) and (15 < x < 275) and (-5 < z < 50)):
+        return True
+    else: 
+        return False
 
 def main():
     # STATIC PLACE TO MOVE BALL
     # Position in Robot Frame (mm): [  95.33310498 -201.37709481  -17.20353483]
-    drop_off_loc = np.array([95.33310498, -201.37709481, -17.20353483])
-    home = np.array([0, 220, 200])
-
+    drop_off_loc_red = np.array([200, -200, 110])
+    drop_off_loc_blue = np.array([50, -200, 110])
+    drop_off_loc_yellow = np.array([200, 200, 110])
+    drop_off_loc_orange = np.array([50, 200, 110])
+    home = np.array([0, 220, 200, -25])
+    
     try:
         # Camera calibration
         calibrate_camera()
 
         # Initialize Robot instance
         robot = Robot()
-        traj_init = 3  # Trajectory initialization time
-        init_robot(robot, traj_init)
+        traj_init = 4  # Trajectory initialization time
+        init_robot(robot, traj_init, home)
 
         # Set robot to velocity control mode
         robot.write_mode("velocity")
@@ -530,23 +608,82 @@ def main():
         controller.Ki = (0.025 * Kp) * np.eye(3)  # Integral gain
 
         # Frame disregard logic
-        num_frames_to_disregard = 10
+        num_frames_to_average = 6
 
         while True:
             # Detect spheres in live feed
-            for i in range(num_frames_to_disregard):
-                spheres, depth_frame = detect_colored_spheres_live(camera, workspace_mask)
+            average_spheres = average_spheres_over_frames(camera, workspace_mask, num_frames_to_average)
+            print(f"Average Spheres: {average_spheres}")
+            test_coords = get_sphere_coordinates_PnP(average_spheres, camera_intrinsics, transformation_matrix)
+            for color, coords in test_coords:
+                print(f"Color: {color} -> Coords: {np.array(coords)}")
 
-            # # Pick and place each color detected (DEPTH)
+            # for i in range(num_frames_to_average):
+            #     spheres, depth_frame = detect_colored_spheres_live(camera, workspace_mask)
+
+            
+
+            # # # Pick and place each color detected (DEPTH)
             # robot_sphere_coordinates_depth = get_sphere_coordinates_depth(spheres, camera_depth_intrinsics, transformation_matrix, depth_frame)
+            # print(f"DEPTH READINGS")
             # for color, coords in robot_sphere_coordinates_depth:
-            #     pick_and_place(robot, controller, np.array(coords), drop_off_loc, home, timestep)
 
+            #     print(f"Color: {color} -> Coordinates: {np.array(coords)}")
+            #     print("\n")
+            #     if(check_workspace(np.array(coords))):
+            #         print("IN WORKSPACE ^^^")
+            #         pick_and_place(robot, controller, np.array(coords), drop_off_loc, home, timestep)
+
+
+            # print("____________________________________________")
             # Pick and place each color detected (PnP)
-            robot_sphere_coordinates_PnP = get_sphere_coordinates_PnP(spheres, camera_intrinsics, transformation_matrix)
-            for color, coords in robot_sphere_coordinates_PnP:
-                pick_and_place(robot, controller, np.array(coords), drop_off_loc, home, timestep)
+            robot_sphere_coordinates_PnP = get_sphere_coordinates_PnP(average_spheres, camera_intrinsics, transformation_matrix)
 
+            # Filter the array to include only spheres in the valid workspace
+            valid_spheres = [(color, coords) for color, coords in robot_sphere_coordinates_PnP if check_workspace(coords)]
+            # print(f"PnP READINGS")
+            # for color, coords in robot_sphere_coordinates_PnP:
+            #     print(f"Color: {color} -> Coordinates: {np.array(coords)}")
+            #     # print("\n")
+            #     coords = np.array(coords)
+            #     if(check_workspace(coords)):
+            #         print("IN WORKSPACE ^^^")
+            #         coords[2] += 7.5
+            #         pick_and_place(robot, controller, coords, drop_off_loc, timestep)
+            #         robot.write_mode("position")
+            #         init_robot(robot, traj_init, home)
+            #         robot.write_mode("velocity")
+            # print("\n\n")
+
+            if valid_spheres:  # Check if the list is non-empty
+                # Grab the first sphere from the list
+                color, coords = valid_spheres[0]
+                print(f"Color: {color} -> Coordinates: {np.array(coords)}")
+                
+                # Set drop_off_loc based on color
+                if color == "red":
+                    print(color)
+                    drop_off_loc = drop_off_loc_red
+                elif color == "yellow":
+                    drop_off_loc = drop_off_loc_yellow
+                elif color == "orange":
+                    drop_off_loc = drop_off_loc_orange
+                elif color == "blue":
+                    drop_off_loc = drop_off_loc_blue
+                else:
+                    print(f"Unknown color: {color}. Using default drop-off location.")
+                    drop_off_loc = drop_off_loc_red
+                    
+                coords = np.array(coords)
+                if check_workspace(coords):
+                    print("IN WORKSPACE ^^^")
+                    # coords[2] += 2.5  # Adjust Z-coordinate as needed
+                    pick_and_place(robot, controller, coords, drop_off_loc, timestep)
+                    robot.write_mode("position")
+                    init_robot(robot, traj_init, home)
+                    robot.write_mode("velocity")
+            else:
+                print("No valid spheres detected in the frame.")
 
             # Exit on 'q' key press
             if cv2.waitKey(1) & 0xFF == ord('q'):
