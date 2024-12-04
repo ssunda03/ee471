@@ -124,6 +124,42 @@ def calibrate_camera():
         camera.stop()
         cv2.destroyAllWindows()
 
+def find_workspace_mask(camera_to_robot,camera_intrinsics):
+    ROBOT_WORKSPACE_CORNERS = np.array([
+        [],
+        [],
+        [],
+        [],
+    ])
+    
+    rot_transposed = camera_to_robot[:3,:3].T
+    tvec_inversed = -1 * rot_transposed * camera_to_robot[:3,3]
+    
+    robot_to_camera = np.zeros((4,4))
+    robot_to_camera[:3,:3] = rot_transposed
+    robot_to_camera[:3,3] = tvec_inversed
+    robot_to_camera[3,3] = 1
+    
+    camera_points = robot_to_camera @ ROBOT_WORKSPACE_CORNERS.T
+    
+    camera_points_3d = camera_points[:3, :]  # Take only X, Y, Z
+    
+    # Project the points using the camera intrinsic matrix
+    projected_points_homogeneous = camera_intrinsics @ camera_points_3d.T
+    
+    # Normalize the homogeneous coordinates (u, v, w) -> (u/w, v/w)
+    u = projected_points_homogeneous[0, :] / projected_points_homogeneous[2, :]
+    v = projected_points_homogeneous[1, :] / projected_points_homogeneous[2, :]
+    
+    # Return the 2D image coordinates as a Nx2 array
+    image_coordinates = np.vstack((u, v))
+    
+    return image_coordinates
+    
+    
+    
+    
+
 def detect_colored_spheres_live(camera, workspace_mask=None):
     """
     Detects and classifies colored spheres in the live feed from the RealSense camera.
@@ -596,6 +632,7 @@ def main():
 
         # Define workspace mask (optional)
         workspace_mask = None  # Replace with actual mask if needed
+        find_workspace_mask(transformation_matrix,camera_intrinsics)
 
         # Initialize PID Controller
         timestep = 0.05  # Control loop timestep in seconds
